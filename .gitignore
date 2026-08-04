@@ -1,0 +1,14 @@
+# Database files (generated at runtime)
+backend/ambientate.db
+backend/ambientate.db-shm
+backend/ambientate.db-wal
+
+# Server logs
+backend/server.log
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Node
+node_modules/

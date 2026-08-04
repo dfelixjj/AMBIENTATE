@@ -1,0 +1,226 @@
+--- index.html.orig	2026-07-30 18:46:40
++++ index.html	2026-07-30 18:51:39
+@@ -334,11 +334,13 @@
+     </div>
+   </div>
+ 
+-  <main id="viewInicio"></main>
+-  <main id="viewCaja" class="hidden"></main>
+-  <main id="viewHistorico" class="hidden"></main>
+-  <main id="viewAdmin" class="hidden"></main>
+-  <main id="viewGastos" class="hidden"></main>
++  <main id="views">
++    <section id="viewInicio" class="view" role="region" aria-label="Inicio"></section>
++    <section id="viewCaja" class="view hidden" role="region" aria-label="Caja y cierre"></section>
++    <section id="viewHistorico" class="view hidden" role="region" aria-label="Histórico"></section>
++    <section id="viewAdmin" class="view hidden" role="region" aria-label="Administración"></section>
++    <section id="viewGastos" class="view hidden" role="region" aria-label="Gastos en efectivo"></section>
++  </main>
+ 
+   <nav class="tabbar">
+     <button class="tab on" data-tab="Inicio"><span class="ti">🏠</span>Inicio</button>
+@@ -357,8 +359,8 @@
+   </div>
+ 
+   <div class="sheet-bg" id="sheetBg"></div>
+-  <div class="sheet" id="sheet"></div>
+-  <div class="toast" id="toast"></div>
++  <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="Ventana" aria-hidden="true" tabindex="-1"></div>
++  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+ </div>
+ 
+ <script>
+@@ -376,6 +378,10 @@
+ const nextDay = iso => addDays(iso,1);
+ const uid = () => Math.random().toString(36).slice(2,9);
+ const inits = s => s.split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0]).join("").toUpperCase();
++// Seguridad: escapa texto controlable por el usuario antes de insertarlo con innerHTML (evita XSS almacenado)
++function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m])); }
++// Accesibilidad: activa con Enter/Espacio los elementos con role="button" (tarjetas, filas)
++function kb(ev){ if(ev.key==="Enter"||ev.key===" "){ ev.preventDefault(); ev.currentTarget.click(); } }
+ 
+ /* catálogo de aromas disponibles */
+ const DEFAULT_AROMAS = ["Skull","Canela","Mango","Infantil","Azahar"];
+@@ -483,7 +489,7 @@
+ function openMaps(cid, ev){
+   if(ev) ev.stopPropagation();
+   const c = cliente(cid); if(!c) return;
+-  window.open(mapsUrl(c), "_blank", "noopener");
++  const w=window.open(mapsUrl(c), "_blank", "noopener"); if(w) w.opener=null; // evita acceso de la pestaña nueva a window.opener
+ }
+ 
+ /* ---------- estado ---------- */
+@@ -494,7 +500,13 @@
+   try{ const raw = localStorage.getItem(LS_KEY); if(raw){ const s=JSON.parse(raw); if(!s.aromas||!s.aromas.length) s.aromas=DEFAULT_AROMAS.slice(); return s; } }catch(e){}
+   return seed();
+ }
+-function save(){ localStorage.setItem(LS_KEY, JSON.stringify(S)); }
++// Almacenamiento: localStorage tiene ~5 MB. Las fotos de gasto (base64) pueden agotarlo.
++// MEJORA FUTURA: mover las fotos a IndexedDB (sin límite práctico) y guardar solo la referencia aquí.
++// De momento capturamos el error de cuota para que la app no se rompa al guardar.
++function save(){
++  try{ localStorage.setItem(LS_KEY, JSON.stringify(S)); }
++  catch(e){ if(e && (e.name==="QuotaExceededError"||e.code===22)) toast("⚠ Almacenamiento lleno: exporta una copia o borra fotos"); else throw e; }
++}
+ 
+ function seed(){
+   const tecnicos = [
+@@ -776,7 +788,7 @@
+   const dia = g.fecha? ` · ${g.fecha.slice(8,10)}/${g.fecha.slice(5,7)}`:"";
+   return `<div class="row">
+     ${foto}
+-    <div class="rm"><div class="rn">${g.negocio||"Gasto"}</div><div class="rd">${g.concepto||""}${dia}</div></div>
++    <div class="rm"><div class="rn">${esc(g.negocio||"Gasto")}</div><div class="rd">${esc(g.concepto||"")}${dia}</div></div>
+     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+       <div style="font-weight:800">${EUR(g.importe)}</div>
+       <button class="rx" onclick="delGasto('${g.id}')">🗑</button></div>
+@@ -834,7 +846,7 @@
+ }
+ function verFoto(id){
+   const g=(S.gastos||[]).find(x=>x.id===id); if(!g||!g.foto) return;
+-  const w=window.open("","_blank"); if(w) w.document.write('<title>Documento</title><body style="margin:0;background:#111;display:grid;place-items:center;min-height:100vh"><img src="'+g.foto+'" style="max-width:100%;max-height:100vh"></body>');
++  const w=window.open("","_blank"); if(w){ w.opener=null; w.document.write('<title>Documento</title><body style="margin:0;background:#111;display:grid;place-items:center;min-height:100vh"><img alt="Documento del gasto" src="'+g.foto+'" style="max-width:100%;max-height:100vh"></body>'); }
+ }
+ function delGasto(id){ askConfirm("¿Borrar este gasto?", ()=>{ S.gastos=(S.gastos||[]).filter(g=>g.id!==id); save(); renderAll(); switchTab("Gastos"); toast("Gasto borrado"); }, true); }
+ 
+@@ -846,11 +858,11 @@
+       ? `<span class="mtag mt-crit">⚠ Incidencia</span>`
+       : (v.motivoAnadido==="venta" ? `<span class="mtag mt-acc">➕ Venta</span>` : `<span class="mtag mt-acc">➕ Añadido</span>`)) : "";
+   return `<div class="cli-wrap" data-cid="${v.clienteId}">
+-    <div class="cli e-${v.estado} ${(v.heredada||v.estado==='ausente')?'hered':''} ${v.motivoAnadido==='incidencia'?'mot-incid':''}" onclick="openVisita('${v.clienteId}')">
++    <div class="cli e-${v.estado} ${(v.heredada||v.estado==='ausente')?'hered':''} ${v.motivoAnadido==='incidencia'?'mot-incid':''}" role="button" tabindex="0" aria-label="Abrir visita de ${esc(c.negocio)}" onkeydown="kb(event)" onclick="openVisita('${v.clienteId}')">
+       <div class="stbar"></div>
+-      <div class="draghandle" title="Arrastra para reordenar" onpointerdown="dragStart(event)">⠿</div>
+-      <div class="mid"><div class="nm">${c.negocio}</div><div class="ad">${c.direccion} · ${EUR(c.importe)}</div>
+-        <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">${formaChip(c.formaHabitual)}<span class="mtag mt-vio">🌸 ${c.aroma||"—"}</span>${heredTag}${ausTag}${addTag}</div></div>
++      <div class="draghandle" title="Arrastra para reordenar" aria-hidden="true" onpointerdown="dragStart(event)">⠿</div>
++      <div class="mid"><div class="nm">${esc(c.negocio)}</div><div class="ad">${esc(c.direccion)} · ${EUR(c.importe)}</div>
++        <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">${formaChip(c.formaHabitual)}<span class="mtag mt-vio">🌸 ${esc(c.aroma||"—")}</span>${heredTag}${ausTag}${addTag}</div></div>
+       <div class="rt"><button class="mapbtn" title="Ver en Google Maps" onclick="openMaps('${v.clienteId}',event)">📍</button><span class="mtag mt-acc">Abrir</span></div>
+     </div>
+     <div class="quick">
+@@ -871,9 +883,9 @@
+   else if(v.estado==="ausente") tag = `<span class="mtag mt-neutral">Ausente → mañana</span>`;
+   else if(v.estado==="incidencia") tag = `<span class="mtag mt-crit">⚠ Incidencia</span>`;
+   const extra = v.ventaAdic?` <span class="mtag mt-vio">+Venta</span>`:"";
+-  return `<div class="cli e-${v.estado}" onclick="openVisita('${v.clienteId}')">
++  return `<div class="cli e-${v.estado}" role="button" tabindex="0" aria-label="Abrir visita de ${esc(c.negocio)}" onkeydown="kb(event)" onclick="openVisita('${v.clienteId}')">
+     <div class="stbar"></div>
+-    <div class="mid"><div class="nm">${c.negocio}</div><div style="margin-top:4px">${tag}${extra}</div></div>
++    <div class="mid"><div class="nm">${esc(c.negocio)}</div><div style="margin-top:4px">${tag}${extra}</div></div>
+     <div class="rt"><div class="amt">${v.estado==="realizada"&&v.cobro?EUR(v.cobro.importe):"—"}</div></div>
+   </div>`;
+ }
+@@ -936,7 +948,7 @@
+     const r=S.rutas.find(x=>x.id===c.rutaId);
+     return `<div class="row" onclick="insertarCliente('${c.id}')">
+       <div class="ri">🏢</div>
+-      <div class="rm"><div class="rn">${c.negocio}</div><div class="rd">${c.direccion} · ${r?r.nombre:"sin ruta"} · 🌸 ${c.aroma||"—"}</div></div>
++      <div class="rm"><div class="rn">${esc(c.negocio)}</div><div class="rd">${esc(c.direccion)} · ${esc(r?r.nombre:"sin ruta")} · 🌸 ${esc(c.aroma||"—")}</div></div>
+       <span class="mtag mt-acc">Añadir</span></div>`;
+   }).join("");
+ }
+@@ -958,7 +970,7 @@
+ }
+ function preguntarMotivo(cid){
+   const c=cliente(cid); const sh=document.getElementById("sheet");
+-  sh.innerHTML=`<div class="grab"></div><h2>${c?c.negocio:"Cliente"}</h2>
++  sh.innerHTML=`<div class="grab"></div><h2>${esc(c?c.negocio:"Cliente")}</h2>
+     <p class="sub">Añadido a la ruta · ¿qué vas a registrar?</p>
+     <div class="seg two" style="margin-top:8px">
+       <button onclick="motivoAnadido('${cid}','incidencia')"><span class="si">⚠️</span>Incidencia</button>
+@@ -1009,7 +1021,7 @@
+   const sh = document.getElementById("sheet");
+   if(sheetState.step==="ask"){
+     sh.innerHTML = `<div class="grab"></div>
+-      <h2>${c.negocio}</h2><p class="sub">${c.direccion} · habitual ${EUR(c.importe)}</p>
++      <h2>${esc(c.negocio)}</h2><p class="sub">${esc(c.direccion)} · habitual ${EUR(c.importe)}</p>
+       <div style="margin:-8px 0 14px"><button class="mtag mt-acc" onclick="openMaps('${c.id}')">📍 Ver ubicación en Google Maps</button></div>
+       <div class="ask-q">¿Se ha realizado<br>el servicio?</div>
+       <div class="yn">
+@@ -1021,7 +1033,7 @@
+   }
+   if(sheetState.step==="motivo"){
+     sh.innerHTML = `<div class="grab"></div>
+-      <h2>${c.negocio}</h2><p class="sub">¿Qué ha pasado?</p>
++      <h2>${esc(c.negocio)}</h2><p class="sub">¿Qué ha pasado?</p>
+       <div class="seg two" style="margin-bottom:10px">
+         <button onclick="setMotivo('cerrado')"><span class="si">🔒</span>Cerrado</button>
+         <button onclick="setMotivo('ausente')"><span class="si">🚪</span>Ausente</button>
+@@ -1034,7 +1046,7 @@
+   const s = sheetState;
+   const incidOn = !!s.incid;
+   sh.innerHTML = `<div class="grab"></div>
+-    <h2>${c.negocio}</h2><p class="sub">${c.direccion}${s.servicioOk?` · <b style="color:var(--good)">Servicio ✓</b>`:""}</p>
++    <h2>${esc(c.negocio)}</h2><p class="sub">${esc(c.direccion)}${s.servicioOk?` · <b style="color:var(--good)">Servicio ✓</b>`:""}</p>
+     <div style="display:flex;gap:8px;flex-wrap:wrap;margin:-8px 0 10px">${formaChip(c.formaHabitual)}<span class="mtag mt-vio">🌸 ${c.aroma||"—"}</span><span class="mtag mt-neutral">🧪 ${dispResumen(c)}</span><button class="mtag mt-acc" onclick="openMaps('${c.id}')">📍 Mapa</button></div>
+     ${s.servicioOk!==false?`<div style="background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:11px 13px;margin-bottom:12px;font-size:13.5px;font-weight:600">🧪 Consumo de esta visita: <b style="color:var(--accent-ink)">${consumoPreview(c, s.aroma||c.aroma)}</b></div>
+     <div class="field"><label>Importe a cobrar</label>
+@@ -1109,8 +1121,29 @@
+   toast(s.servicioOk===false?"⚠ Incidencia registrada":"✓ Visita guardada · "+EUR(v.cobro?v.cobro.importe:0));
+ }
+ 
+-function openSheet(){ document.getElementById("sheetBg").classList.add("open"); document.getElementById("sheet").classList.add("open"); }
+-function closeSheet(){ document.getElementById("sheetBg").classList.remove("open"); document.getElementById("sheet").classList.remove("open"); sheetState=null; }
++// Accesibilidad del modal: recuerda el foco previo, oculta el fondo a lectores y mueve el foco al sheet
++let sheetPrevFocus=null;
++function bgInert(on){
++  [document.querySelector(".topbar"), document.getElementById("views"), document.querySelector(".tabbar")]
++    .forEach(el=>{ if(!el) return; if(on) el.setAttribute("aria-hidden","true"); else el.removeAttribute("aria-hidden"); });
++}
++function openSheet(){
++  sheetPrevFocus = document.activeElement;
++  const sh=document.getElementById("sheet");
++  document.getElementById("sheetBg").classList.add("open");
++  sh.classList.add("open"); sh.setAttribute("aria-hidden","false");
++  bgInert(true);
++  const foco = sh.querySelector("input,select,textarea,button,[tabindex]") || sh;
++  try{ foco.focus(); }catch(e){}
++}
++function closeSheet(){
++  const sh=document.getElementById("sheet");
++  document.getElementById("sheetBg").classList.remove("open");
++  sh.classList.remove("open"); sh.setAttribute("aria-hidden","true");
++  bgInert(false); sheetState=null;
++  if(sheetPrevFocus && sheetPrevFocus.focus){ try{ sheetPrevFocus.focus(); }catch(e){} }
++  sheetPrevFocus=null;
++}
+ 
+ // confirmador propio (el confirm() nativo se bloquea en PWA/webview embebidas)
+ let __confirmCb=null;
+@@ -1312,7 +1345,7 @@
+     const t = tecnico(g.tecnicoId);
+     const foto = g.foto?`<img src="${g.foto}" class="gasto-foto" onclick="verFoto('${g.id}')" alt="doc">`:`<div class="gasto-noimg">🧾</div>`;
+     return `<div class="row">${foto}
+-      <div class="rm"><div class="rn">${g.negocio} · ${EUR(g.importe)}</div><div class="rd">${g.concepto||""}${t?` · ${t.nombre}`:""}</div></div>
++      <div class="rm"><div class="rn">${esc(g.negocio)} · ${EUR(g.importe)}</div><div class="rd">${esc(g.concepto||"")}${t?` · ${esc(t.nombre)}`:""}</div></div>
+       ${g.foto?`<span class="mtag mt-acc">📎 Ticket</span>`:""}</div>`;
+   }).join("");
+   return `<div class="sec-t">Gastos en efectivo hoy <span class="cnt">${EUR(total)}</span></div>${rows}`;
+@@ -1332,7 +1365,7 @@
+ function admAromas(){
+   const chips = S.aromas.map(a=>{
+     const n = S.clientes.filter(c=>c.aroma===a).length;
+-    return `<span class="aromachip">🌸 ${a}${n?` <b>${n}</b>`:""}<button onclick="delAroma('${a.replace(/'/g,"\\'")}')" title="Eliminar">✕</button></span>`;
++    return `<span class="aromachip">🌸 ${esc(a)}${n?` <b>${n}</b>`:""}<button onclick="delAroma('${a.replace(/'/g,"\\'")}')" title="Eliminar" aria-label="Eliminar aroma ${esc(a)}">✕</button></span>`;
+   }).join("");
+   return `<div class="sec-t">🌸 Aromas disponibles <span class="cnt">${S.aromas.length}</span></div>
+     <div class="aromawrap">${chips||`<span style="color:var(--faint);font-size:14px">Sin aromas</span>`}</div>
+@@ -1360,7 +1393,7 @@
+     html += `<div class="sec-t">${r.nombre} <span class="cnt">${cs.length}</span></div>`;
+     html += cs.map(c=>`<div class="row">
+       <div class="ri">🏢</div>
+-      <div class="rm"><div class="rn">${c.negocio}</div><div class="rd">${c.sector} · ${EUR(c.importe)} · 🌸 ${c.aroma||"—"} · 🧪 ${dispResumen(c)}</div>
++      <div class="rm"><div class="rn">${esc(c.negocio)}</div><div class="rd">${esc(c.sector)} · ${EUR(c.importe)} · 🌸 ${esc(c.aroma||"—")} · 🧪 ${esc(dispResumen(c))}</div>
+         <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">${formaChip(c.formaHabitual)}<button class="mtag mt-acc" onclick="openMaps('${c.id}')">📍 Mapa</button></div></div>
+       <button class="rx" onclick="editCliente('${c.id}')">✏️</button>
+       <button class="rx" onclick="delCliente('${c.id}')">🗑</button>
+@@ -1733,6 +1766,8 @@
+ document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>switchTab(t.dataset.tab)));
+ document.getElementById("rutaSel").addEventListener("change",e=>{ S.rutaSel=e.target.value; save(); renderAll(); tbSet(currentRuta().nombre); });
+ document.getElementById("sheetBg").addEventListener("click",closeSheet);
++// Accesibilidad: cerrar el modal con la tecla Escape cuando está abierto
++document.addEventListener("keydown",e=>{ if(e.key==="Escape" && document.getElementById("sheet").classList.contains("open")) closeSheet(); });
+ document.getElementById("tbAv").addEventListener("click",logout);
+ // guardar estado si se minimiza / cierra la app (PWA en segundo plano)
+ document.addEventListener("visibilitychange",()=>{
