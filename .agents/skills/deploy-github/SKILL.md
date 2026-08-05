@@ -10,7 +10,7 @@ Ejecuta estos pasos **en orden** y **pide confirmación** al usuario antes del p
 
 ## Repositorio
 
-- **Remote**: `https://github.com/andalmet-platform/AMBIENTATE.git`
+- **Remote**: `https://github.com/dfelixjj/AMBIENTATE.git`
 - **Branch**: `main`
 - **Directorio de trabajo**: `/Users/felixjimenezjurado/Desktop/ANDALMET/app andalmet/ambientate-rutas`
 
