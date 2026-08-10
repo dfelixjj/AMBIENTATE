@@ -3355,30 +3355,107 @@ function moverClienteEnRuta(cid, dir){
   positions.forEach((absIdx,k)=>{ S.clientes[absIdx]=subseq[k]; });
   save(); renderAdmin();
 }
+function descargarRutaCSV(rutaId){
+  const r = S.rutas.find(x=>x.id===rutaId); if(!r) return;
+  const cs = S.clientes.filter(c=>c.rutaId===r.id && c.activo!==false);
+  const tec = tecnico(r.tecnicoId);
+  const filas = [
+    ["DESGLOSE DE RUTA - " + r.nombre.toUpperCase()],
+    ["Técnico asignado", tec ? tec.nombre : "Sin asignar"],
+    ["Frecuencia de repetición", (r.frecuenciaDias||28) + " días"],
+    ["Clientes activos", cs.length],
+    [],
+    ["ORDEN", "CLIENTE / NEGOCIO", "DIRECCIÓN", "SECTOR", "AROMA", "DISPOSITIVOS", "CONSUMO (ML/MES)", "FORMA PAGO", "IMPORTE (€)"],
+    ...cs.map((c, i)=>[
+      i+1,
+      c.negocio||"",
+      c.direccion||"",
+      c.sector||"",
+      c.aroma||"",
+      dispResumen(c)||"0",
+      consumoMensualCliente(c),
+      c.formaHabitual||"efectivo",
+      eurPlano(c.importe)
+    ])
+  ];
+  descargarCSV(`ruta-${r.nombre.toLowerCase().replace(/\s+/g,'-')}-${todayISO()}.csv`, filas);
+}
+
 function admRutas(){
   const rows = S.rutas.map(r=>{
     const tec = tecnico(r.tecnicoId);
     const cs = S.clientes.filter(c=>c.rutaId===r.id && c.activo!==false);
     const nDisp = cs.reduce((s,c)=>s+clienteDisps(c).length,0);
     const valor = cs.reduce((s,c)=>s+(c.importe||0),0);
-    // rentabilidad real de la ruta este mes: facturación − coste de aroma realmente consumido
     const desdeMes = inicioMes(S.fecha);
     const costeRuta = cs.reduce((s,c)=>s+costeAromaClienteRango(c, desdeMes, S.fecha), 0);
     const beneficioRuta = cs.reduce((s,c)=>s+beneficioCliente(c, desdeMes, S.fecha), 0);
     const mlRuta = cs.reduce((s,c)=>s+consumoMensualCliente(c), 0);
     const exp = rutaExpandida===r.id;
-    const lista = exp ? cs.map((c,i)=>`<div class="row" style="margin-left:14px">
-        <div class="stepper" style="margin-right:2px"><button ${i===0?'disabled':''} onclick="moverClienteEnRuta('${c.id}',-1)">▲</button><button ${i===cs.length-1?'disabled':''} onclick="moverClienteEnRuta('${c.id}',1)">▼</button></div>
-        <div class="ri" style="width:30px;height:30px;font-size:13px">${i+1}</div>
-        <div class="rm"><div class="rn" style="font-size:14px">${esc(c.negocio)}</div><div class="rd">${EURI(c.importe)}</div></div>
-      </div>`).join("") : "";
+
+    const listaDetallada = exp ? `
+      <div style="margin-top:14px;background:var(--surface-2);border-radius:12px;padding:12px;border:1px solid var(--line)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div style="font-weight:800;font-size:14px;color:var(--ink)">📋 Clientes asignados a ${esc(r.nombre)} (${cs.length})</div>
+          <button class="mtag mt-acc" onclick="descargarRutaCSV('${r.id}')">📄 Exportar a Excel</button>
+        </div>
+        ${cs.length ? `
+          <div class="dtable-wrap">
+            <table class="dtable">
+              <thead>
+                <tr>
+                  <th style="width:70px">Orden</th>
+                  <th>Cliente / Negocio</th>
+                  <th>Dirección</th>
+                  <th>Aroma</th>
+                  <th>Dispositivos</th>
+                  <th style="text-align:right">Consumo ml</th>
+                  <th>Pago</th>
+                  <th style="text-align:right">Cuota (€)</th>
+                  <th style="text-align:right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${cs.map((c,i)=>{
+                  const mlC = consumoMensualCliente(c);
+                  return `<tr>
+                    <td>
+                      <div class="stepper">
+                        <button ${i===0?'disabled':''} onclick="moverClienteEnRuta('${c.id}',-1)">▲</button>
+                        <button ${i===cs.length-1?'disabled':''} onclick="moverClienteEnRuta('${c.id}',1)">▼</button>
+                        <span style="font-weight:700;margin-left:4px">${i+1}º</span>
+                      </div>
+                    </td>
+                    <td onclick="verFichaCliente('${c.id}')" style="cursor:pointer">
+                      <b>${esc(c.negocio)}</b>
+                      <div class="rd">${esc(c.sector||"")}</div>
+                    </td>
+                    <td>${esc(c.direccion||"—")}</td>
+                    <td>🌸 ${esc(c.aroma||"Sin aroma")}</td>
+                    <td>🧪 ${esc(dispResumen(c)||"0")}</td>
+                    <td style="text-align:right;font-weight:700">${mlC} ml</td>
+                    <td>${formaChip(c.formaHabitual)}</td>
+                    <td style="text-align:right;font-weight:700;color:var(--accent)">${EURcli(c.importe,c)}</td>
+                    <td style="text-align:right">
+                      <button class="rx" onclick="verFichaCliente('${c.id}')" title="Ver ficha">${ic('building',15)}</button>
+                      <button class="rx" onclick="editCliente('${c.id}')" title="Editar">${ic('pencil',15)}</button>
+                    </td>
+                  </tr>`;
+                }).join("")}
+              </tbody>
+            </table>
+          </div>
+        ` : `<div class="empty" style="padding:14px">Sin clientes asignados a esta ruta.</div>`}
+      </div>
+    ` : "";
+
     return `<div class="row" style="display:block">
       <div style="display:flex;align-items:center;gap:12px">
-        <div class="ri">🚚</div>
-        <div class="rm"><div class="rn">${esc(r.nombre)}</div>
+        <div class="ri" style="background:var(--accent-soft);color:var(--accent-ink)">🚚</div>
+        <div class="rm"><div class="rn" style="font-size:16px">${esc(r.nombre)}</div>
           <div class="rd">${cs.length} clientes · ${nDisp} dispositivos · valor ${EURI(valor)} · cada ${r.frecuenciaDias||28} días</div></div>
-        <button class="rx" onclick="editRuta('${r.id}')" aria-label="Editar ruta">✏️</button>
-        <button class="rx" onclick="delRuta('${r.id}')" aria-label="Borrar ruta">🗑</button>
+        <button class="rx" onclick="editRuta('${r.id}')" aria-label="Editar ruta">${ic('pencil',15)}</button>
+        <button class="rx" onclick="delRuta('${r.id}')" aria-label="Borrar ruta">${ic('trash',15)}</button>
       </div>
       <div class="fc-grid" style="margin-top:10px;grid-template-columns:repeat(auto-fit,minmax(120px,1fr))">
         <div class="fc-stat"><div class="fc-stat-n">${mlRuta} ml</div><div class="fc-stat-l">Consumo del mes</div></div>
@@ -3386,14 +3463,16 @@ function admRutas(){
         <div class="fc-stat"><div class="fc-stat-n" style="color:${beneficioRuta>=0?'var(--good)':'var(--crit)'}">${EUR(beneficioRuta)}</div><div class="fc-stat-l">Rentabilidad del mes</div></div>
       </div>
       <div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap">
-        <span style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase">Técnico</span>
-        <select onchange="asignarTecnicoRuta('${r.id}',this.value)" style="border:1px solid var(--line);border-radius:10px;padding:7px 9px;background:var(--surface-2);color:var(--ink);font-weight:700">
+        <span style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase">Técnico:</span>
+        <select onchange="asignarTecnicoRuta('${r.id}',this.value)" style="border:1px solid var(--line);border-radius:10px;padding:6px 9px;background:var(--surface-2);color:var(--ink);font-weight:700">
           <option value="" ${!r.tecnicoId?"selected":""}>Sin asignar</option>
           ${S.tecnicos.map(t=>`<option value="${t.id}" ${t.id===r.tecnicoId?"selected":""}>${esc(t.nombre)}</option>`).join("")}
         </select>
-        <button class="mtag mt-acc" onclick="toggleRutaExpandida('${r.id}')">${exp?"Ocultar orden":"Ordenar clientes"}</button>
+        <button class="mtag ${exp?'mt-acc':'mt-neutral'}" onclick="toggleRutaExpandida('${r.id}')">
+          ${exp ? '▲ Ocultar deslose' : `📋 Ver los ${cs.length} clientes y consumos ↓`}
+        </button>
       </div>
-      ${lista}
+      ${listaDetallada}
     </div>`;
   }).join("");
   const incidPend = incidenciasFilas().length;
