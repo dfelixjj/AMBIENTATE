@@ -2158,27 +2158,175 @@ function cerrarJornada(){
 
 /* ==================== TAREAS DEL ADMINISTRADOR ==================== */
 // "disputa" cuenta como abierta: sigue viva hasta que el admin la cierra de verdad, no se pierde al marcarla
-function tareasPendientes(){ return (S.tareas||[]).filter(t=>t.estado==="pendiente"||t.estado==="disputa"); }
-// al cerrar una jornada se crea una tarea para que el admin verifique importes y confirme los pendientes -> mañana
-function tareaVerificarCierre(j){
-  const st=stats(j);
-  const gastos=(S.gastos||[]).filter(g=>g.fecha===j.fecha && g.tecnicoId===j.tecnicoId).reduce((s,g)=>s+(g.importe||0),0);
-  const pendientes=j.visitas.filter(v=>v.estado!=="realizada").map(v=>{const c=cliente(v.clienteId);return c?c.negocio:"";}).filter(Boolean);
-  S.tareas=S.tareas||[];
-  S.tareas.push({id:uid(), tipo:"cierre", estado:"pendiente", fecha:j.fecha, rutaId:j.rutaId, tecnicoId:j.tecnicoId,
-    datos:{realizadas:st.realizadas, cobradoEf:st.cobradoEf, cobradoBanco:st.cobradoBanco, gastos, aEntregar:st.cobradoEf-gastos, pendientes}});
+function todasLasTareasPendientes(){
+  const res = [];
+  
+  // 1. Tareas de Cierre, Discrepancias y Nuevos Clientes
+  (S.tareas||[]).filter(t=>t.estado==="pendiente"||t.estado==="disputa").forEach(t=>{
+    res.push({
+      itemType: "tarea",
+      id: t.id,
+      tipo: t.tipo,
+      estado: t.estado,
+      fecha: t.fecha,
+      rutaId: t.rutaId,
+      tecnicoId: t.tecnicoId,
+      clienteId: t.clienteId,
+      datos: t.datos,
+      notaDiscrepancia: t.notaDiscrepancia
+    });
+  });
+
+  // 2. Solicitudes de Licencias / Vacaciones / Bajas pendientes
+  (S.solicitudes||[]).filter(s=>s.estado==="pendiente").forEach(s=>{
+    res.push({
+      itemType: "solicitud",
+      id: s.id,
+      tipo: s.tipo,
+      estado: s.estado,
+      fecha: s.creada || S.fecha,
+      tecnicoId: s.tecnicoId,
+      fechaInicio: s.fechaInicio,
+      fechaFin: s.fechaFin,
+      nota: s.nota
+    });
+  });
+
+  // 3. Incidencias Abiertas o En Curso
+  incidenciasFilas().filter(x=>x.estado==="abierta"||x.estado==="en_curso").forEach(inc=>{
+    res.push({
+      itemType: "incidencia",
+      id: inc.jKey + "__" + inc.clienteId,
+      jKey: inc.jKey,
+      clienteId: inc.clienteId,
+      cliente: inc.cliente,
+      tipo: inc.tipo,
+      estado: inc.estado,
+      rutaId: inc.rutaId,
+      ruta: inc.ruta,
+      tecnico: inc.tecnico,
+      fecha: inc.fecha,
+      nota: inc.nota,
+      asignadoA: inc.asignadoA,
+      notas: inc.notas,
+      foto: inc.foto
+    });
+  });
+
+  // 4. Fichajes sin cerrar / Desfase Horario de Días Anteriores
+  (S.fichajes||[]).filter(f=>!f.horaFin && f.fecha < S.fecha).forEach(f=>{
+    res.push({
+      itemType: "fichaje",
+      id: f.id,
+      tecnicoId: f.tecnicoId,
+      fecha: f.fecha,
+      horaInicio: f.horaInicio
+    });
+  });
+
+  return res.sort((a,b)=>b.fecha.localeCompare(a.fecha));
 }
-// cuando un técnico da de alta un cliente nuevo, se crea una tarea para que el admin lo supervise (no bloquea al técnico: ya puede facturar)
-function tareaClienteNuevo(clienteId, tecnicoId, rutaId){
-  S.tareas=S.tareas||[];
-  S.tareas.push({id:uid(), tipo:"cliente_nuevo", estado:"pendiente", fecha:S.fecha, rutaId, tecnicoId, clienteId, datos:{}});
+
+function tareasPendientes(){
+  return todasLasTareasPendientes();
 }
+
+function verSolicitudPendiente(id){
+  const s = (S.solicitudes||[]).find(x=>x.id===id); if(!s) return;
+  const tec = tecnico(s.tecnicoId);
+  const sh = document.getElementById("sheet");
+  sh.innerHTML = `<div class="grab"></div><h2>Aprobar ${TIPO_LICENCIA[s.tipo]||s.tipo}</h2>
+    <p class="sub">Solicitado por ${esc(tec?tec.nombre:"—")}</p>
+    <div class="sumcard">
+      <div class="suml"><div class="sl">Técnico</div><div class="sv">${esc(tec?tec.nombre:"—")}</div></div>
+      <div class="suml"><div class="sl">Tipo de licencia</div><div class="sv">${TIPO_LICENCIA[s.tipo]||s.tipo}</div></div>
+      <div class="suml"><div class="sl">Fecha inicio</div><div class="sv">${fmtDate(s.fechaInicio)}</div></div>
+      <div class="suml"><div class="sl">Fecha fin</div><div class="sv">${fmtDate(s.fechaFin)}</div></div>
+      <div class="suml"><div class="sl">Nota / Motivo</div><div class="sv">${esc(s.nota||"—")}</div></div>
+    </div>
+    <button class="cta" onclick="resolverSolicitud('${s.id}','aprobada');closeSheet()">✓ Aprobar solicitud</button>
+    <button class="cta crit" onclick="resolverSolicitud('${s.id}','rechazada');closeSheet()">✕ Rechazar solicitud</button>
+    <button class="cta ghost" onclick="closeSheet()">Cerrar</button>`;
+  openSheet();
+}
+
+function verIncidenciaPendiente(jK, clienteId){
+  const inc = incidenciaObj(jK, clienteId); if(!inc) return;
+  const j = S.jornadas[jK]; const r = j ? S.rutas.find(x=>x.id===j.rutaId) : null;
+  const c = cliente(clienteId); const tecAsig = tecnico(inc.asignadoA);
+  const sh = document.getElementById("sheet");
+  sh.innerHTML = `<div class="grab"></div><h2>Gestionar Incidencia</h2>
+    <p class="sub">${esc(c?c.negocio:"Cliente")} · ${esc(r?r.nombre:"Ruta")}</p>
+    <div class="sumcard">
+      <div class="suml"><div class="sl">Tipo de incidencia</div><div class="sv crit">${TIPO_INCID[inc.tipo]||esc(inc.tipo)}</div></div>
+      <div class="suml"><div class="sl">Estado actual</div><div class="sv">${ESTADO_INCID[inc.estado]?.label||inc.estado}</div></div>
+      <div class="suml"><div class="sl">Descripción / Nota</div><div class="sv">${esc(inc.nota||"Sin nota")}</div></div>
+      <div class="suml"><div class="sl">Fecha registrada</div><div class="sv">${fmtDate(j?j.fecha:S.fecha)}</div></div>
+    </div>
+    <label class="mini-lbl">Asignar técnico responsable</label>
+    <select class="fld-inp" style="margin-bottom:10px" onchange="asignarIncidencia('${jK}','${clienteId}',this.value)">
+      <option value="" ${!inc.asignadoA?"selected":""}>Sin asignar</option>
+      ${S.tecnicos.map(t=>`<option value="${t.id}" ${t.id===inc.asignadoA?"selected":""}>${esc(t.nombre)}</option>`).join("")}
+    </select>
+    <label class="mini-lbl">Cambiar estado de la incidencia</label>
+    <select class="fld-inp" style="margin-bottom:14px" onchange="cambiarEstadoIncidencia('${jK}','${clienteId}',this.value);closeSheet()">
+      ${Object.keys(ESTADO_INCID).map(k=>`<option value="${k}" ${k===inc.estado?"selected":""}>${ESTADO_INCID[k].label}</option>`).join("")}
+    </select>
+    ${inc.foto?`<button class="cta ghost" style="margin-bottom:10px" onclick="verFotoIncidencia('${jK}','${clienteId}')">${ic('paperclip',14)} Ver foto adjunta</button>`:""}
+    <button class="cta" onclick="anadirNotaIncidencia('${jK}','${clienteId}')">+ Añadir nota interna</button>
+    <button class="cta ghost" onclick="closeSheet()">Cerrar</button>`;
+  openSheet();
+}
+
+function verFichajePendiente(id){
+  const f = (S.fichajes||[]).find(x=>x.id===id); if(!f) return;
+  const tec = tecnico(f.tecnicoId);
+  const horaEstimadaFin = f.horaInicio.slice(0,11) + "18:00";
+  formSheet("Ajustar Desfase Horario", [
+    {k:"horaFin", label:"Registrar hora de salida", type:"datetime-local", val:horaEstimadaFin}
+  ], vals=>{
+    if(!vals.horaFin) return;
+    f.horaFin = vals.horaFin;
+    save(); renderAll(); toast("✓ Fichaje de "+(tec?tec.nombre:"técnico")+" cerrado");
+  });
+}
+
 function admTareas(){
-  const ts=tareasPendientes();
+  const ts = todasLasTareasPendientes();
   if(!ts.length) return "";
-  return `<div class="sec-t">🔔 Tareas pendientes <span class="cnt">${ts.length}</span></div>` +
-    ts.slice().reverse().map(t=>{
-      const ruta=S.rutas.find(r=>r.id===t.rutaId), tec=tecnico(t.tecnicoId);
+  return `<div class="sec-t">🔔 Tareas pendientes y Aprobaciones <span class="cnt">${ts.length}</span></div>` +
+    ts.map(t=>{
+      const tec = t.tecnicoId ? tecnico(t.tecnicoId) : null;
+      const ruta = t.rutaId ? S.rutas.find(r=>r.id===t.rutaId) : null;
+
+      if(t.itemType === "solicitud"){
+        const tipoLabel = TIPO_LICENCIA[t.tipo] || t.tipo;
+        const icon = t.tipo==="vacaciones"?"🏖️":t.tipo==="baja"?"🏥":"📋";
+        return `<div class="row" role="button" tabindex="0" onkeydown="kb(event)" onclick="verSolicitudPendiente('${t.id}')" style="border-left:4px solid var(--amber)">
+          <div class="ri" style="background:var(--amber-soft);color:var(--amber)">${icon}</div>
+          <div class="rm"><div class="rn">Solicitud de ${tipoLabel} · ${esc(tec?tec.nombre:"Técnico")}</div>
+            <div class="rd">${fmtDate(t.fechaInicio)} → ${fmtDate(t.fechaFin)}${t.nota?" · "+esc(t.nota):""}</div></div>
+          <span class="mtag mt-warn">Aprobar / Rechazar</span></div>`;
+      }
+
+      if(t.itemType === "incidencia"){
+        const est = ESTADO_INCID[t.estado] || ESTADO_INCID.abierta;
+        const tecAsig = tecnico(t.asignadoA);
+        return `<div class="row" role="button" tabindex="0" onkeydown="kb(event)" onclick="verIncidenciaPendiente('${t.jKey}','${t.clienteId}')" style="border-left:4px solid var(--crit)">
+          <div class="ri" style="background:var(--crit-soft);color:var(--crit)">⚠️</div>
+          <div class="rm"><div class="rn">Incidencia: ${TIPO_INCID[t.tipo]||esc(t.tipo)} · ${esc(t.cliente)}</div>
+            <div class="rd">${esc(t.ruta)} · ${fmtDate(t.fecha)}${t.nota?" · "+esc(t.nota):""}${tecAsig?" · asignada a "+esc(tecAsig.nombre):" · Sin asignar"}</div></div>
+          <span class="mtag ${est.cls}">${est.label}</span></div>`;
+      }
+
+      if(t.itemType === "fichaje"){
+        return `<div class="row" role="button" tabindex="0" onkeydown="kb(event)" onclick="verFichajePendiente('${t.id}')" style="border-left:4px solid var(--violet)">
+          <div class="ri" style="background:var(--violet-soft);color:var(--violet)">⏱️</div>
+          <div class="rm"><div class="rn">Desfase Horario / Fichaje abierto · ${esc(tec?tec.nombre:"Técnico")}</div>
+            <div class="rd">Fichaje del ${fmtDate(t.fecha)} iniciado a las ${t.horaInicio.slice(11,16)} sin hora de salida</div></div>
+          <span class="mtag mt-acc">Ajustar hora</span></div>`;
+      }
+
       if(t.tipo==="cliente_nuevo"){
         const c=cliente(t.clienteId);
         return `<div class="row" role="button" tabindex="0" onkeydown="kb(event)" onclick="verTarea('${t.id}')" style="border-left:4px solid var(--accent)">
@@ -2187,6 +2335,7 @@ function admTareas(){
             <div class="rd">${esc(tec?tec.nombre:"")} · ${esc(ruta?ruta.nombre:"sin ruta")} · ${fmtDate(t.fecha)}</div></div>
           <span class="mtag mt-acc">Revisar</span></div>`;
       }
+
       if(t.estado==="disputa"){
         return `<div class="row" role="button" tabindex="0" onkeydown="kb(event)" onclick="verTarea('${t.id}')" style="border-left:4px solid var(--crit)">
           <div class="ri" style="background:var(--crit-soft);color:var(--crit)">⚠</div>
@@ -2194,6 +2343,7 @@ function admTareas(){
             <div class="rd">${esc(tec?tec.nombre:"")} · ${fmtDate(t.fecha)}${t.notaDiscrepancia?" · "+esc(t.notaDiscrepancia):""}</div></div>
           <span class="mtag mt-crit">En disputa</span></div>`;
       }
+
       return `<div class="row" role="button" tabindex="0" onkeydown="kb(event)" onclick="verTarea('${t.id}')" style="border-left:4px solid var(--warn)">
         <div class="ri" style="background:var(--warn-soft);color:var(--warn)">!</div>
         <div class="rm"><div class="rn">Verificar cierre · ${esc(ruta?ruta.nombre:"")}</div>
