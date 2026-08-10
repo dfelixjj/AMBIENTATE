@@ -3791,8 +3791,29 @@ function cambiarClaveAdmin(){
     {k:"clave",label:"Nueva clave",val:S.adminClave||"0000"},
   ],vals=>{ if(vals.clave.trim()){ S.adminClave=vals.clave.trim(); toast("Clave actualizada"); } });
 }
+function prepararModoProduccion(){
+  askConfirm("¿Deseas vaciar los clientes, rutas y partes de prueba para comenzar a trabajar con tu empresa real? (Tus datos de empresa, aroma y configuración no se borrarán)", ()=>{
+    S.clientes = [];
+    S.rutas = [];
+    S.jornadas = {};
+    S.gastos = [];
+    S.tareas = [];
+    S.fichajes = [];
+    S.solicitudes = [];
+    S.documentos = [];
+    save(); renderAll(); switchTab("Admin");
+    toast("🚀 App lista para producción · Puedes dar de alta tus rutas y clientes reales");
+  }, true);
+}
 function admDatos(){
-  return `<div class="sec-t">Cargar clientes desde Excel</div>
+  return `<div class="sec-t">🚀 Puesta en Producción</div>
+    <div class="row" style="display:block;padding:16px;margin-bottom:10px;background:var(--surface)">
+      <div class="rn" style="margin-bottom:6px">Comenzar a trabajar con datos reales</div>
+      <div class="rd" style="line-height:1.6">Limpia los clientes y rutas de demostración para empezar a volcar tu cartera real de negocios y técnicos. Tus datos de empresa y catálogo de aromas se mantendrán intactos.</div>
+    </div>
+    <button class="addbtn" style="border-color:var(--accent);color:var(--accent);font-weight:700" onclick="prepararModoProduccion()">🚀 Limpiar datos demo y comenzar Producción</button>
+
+    <div class="sec-t">Cargar clientes desde Excel</div>
     <div class="row" style="display:block;padding:16px;margin-bottom:10px">
       <div class="rd" style="line-height:1.6">Descarga la plantilla, rellénala en Excel (una fila por cliente, indicando su ruta y si paga en <b>efectivo</b> o por <b>banco</b>) y vuelca todo de golpe. Las rutas nuevas se crean solas.</div>
     </div>
