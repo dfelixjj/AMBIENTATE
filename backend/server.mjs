@@ -55,8 +55,8 @@ function migrate() {
    ["NEBU 2", "Nebu 2", "ml", 200, 0], ["NEBU 5", "Nebu 5", "ml", 500, 0], ["BACTERIOSTATICO 1", "Bacteriostático 1", "bote", 1, 1]]
     .forEach(d => run("insert into dispositivos_tipo values(?,?,?,?,?)", ...d));
 
-  run("insert into tecnicos values('t1','Juan Martín','600 111 222','tecnico','1234',1)");
-  run("insert into tecnicos values('t2','Ana López','600 333 444','tecnico','1234',1)");
+  run("insert into tecnicos values('t1','Técnico 1','600 111 222','tecnico','1234',1)");
+  run("insert into tecnicos values('t2','Técnico 2','600 333 444','tecnico','1234',1)");
   run("insert into ajustes values('admin_clave','\"0000\"')"); // clave admin (numérica)
 
   run("insert into rutas values('r1','Ruta Utrera','t1',?,1)", hoy);

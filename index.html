@@ -825,6 +825,11 @@ function load(){
     if(!s.ivaPct) s.ivaPct=21;
     (s.rutas||[]).forEach(r=>{ if(r.municipio===undefined) r.municipio=""; });
     if(!s.numeracion) s.numeracion={factura:{prefijo:"FAC-",siguiente:1},presupuesto:{prefijo:"PRE-",siguiente:1},albaran:{prefijo:"ALB-",siguiente:1}};
+    (s.tecnicos||[]).forEach(t=>{
+      if(t.id==="t1" && (t.nombre==="Juan Martín"||!t.nombre)) t.nombre="Técnico 1";
+      if(t.id==="t2" && (t.nombre==="Ana López"||!t.nombre)) t.nombre="Técnico 2";
+      if(t.id==="t3" && (t.nombre==="Marta Ruiz"||!t.nombre)) t.nombre="Técnico 3";
+    });
     return s; } }catch(e){}
   return seed();
 }
@@ -838,8 +843,8 @@ function save(){
 
 function seed(){
   const tecnicos = [
-    {id:"t1", nombre:"Juan Martín", tel:"600 111 222", clave:"1234"},
-    {id:"t2", nombre:"Ana López", tel:"600 333 444", clave:"1234"},
+    {id:"t1", nombre:"Técnico 1", tel:"600 111 222", clave:"1234"},
+    {id:"t2", nombre:"Técnico 2", tel:"600 333 444", clave:"1234"},
   ];
   const hoy0 = todayISO();
   // fechaAncla = inicio del ciclo (cada frecuenciaDias). Anclas repartidas para que, dentro del mes
@@ -1023,7 +1028,7 @@ function seed(){
     {id:uid(), tecnicoId:"t3", tipo:"baja", fechaInicio:addDays(hoy,-2), fechaFin:addDays(hoy,10), nota:"Baja médica", estado:"aprobada", creada:addDays(hoy,-3)},
     {id:uid(), tecnicoId:"t1", tipo:"asuntos_propios", fechaInicio:addDays(hoy,15), fechaFin:addDays(hoy,15), nota:"Gestión personal", estado:"pendiente", creada:hoy},
   ];
-  tecnicos.push({id:"t3", nombre:"Marta Ruiz", tel:"600 555 666", clave:"1234", rol:"tecnico", horasMensuales:160});
+  tecnicos.push({id:"t3", nombre:"Técnico 3", tel:"600 555 666", clave:"1234", rol:"tecnico", horasMensuales:160});
   // ---- Incidencias demo: 3 estados (abierta/en_curso/resuelta), con asignación y notas internas ----
   if(jAntes.visitas[3]) jAntes.visitas[3].incidencia = {tipo:"averia", nota:"Máquina no enciende", estado:"abierta", asignadoA:"", notas:[],
     foto:placeholderDoc("ticket",["Foto de la incidencia",r1cli[3]?r1cli[3].negocio:"","Difusor sin encender","Pendiente de revisión técnica"],"#FEF0EE","#D92D20")};
