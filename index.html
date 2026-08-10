@@ -3601,16 +3601,20 @@ function admDatos(){
     <input type="file" id="impCsv" accept=".csv,text/csv" class="hidden" onchange="importClientesCSV(this)">
     <div class="sec-t">Seguridad</div>
     <button class="addbtn" style="border-color:var(--line);color:var(--muted)" onclick="cambiarClaveAdmin()">🔑 Cambiar clave de administrador</button>
-    <div class="sec-t">Copia de seguridad</div>
-    <div class="row" style="display:block;padding:16px">
-      <div class="rn" style="margin-bottom:6px">💾 Datos de la app</div>
-      <div class="rd" style="line-height:1.6">Todo se guarda en este dispositivo. ${S.clientes.length} clientes, ${S.rutas.length} rutas, ${Object.keys(S.jornadas).length} jornadas registradas.</div>
+    <div class="sec-t">🛡️ Copia de seguridad y Respaldo</div>
+    <div class="row" style="display:block;padding:16px;margin-bottom:12px;background:var(--surface)">
+      <div class="rn" style="margin-bottom:6px">💾 Base de datos sincronizada</div>
+      <div class="rd" style="line-height:1.6">Estado de la información: <b>${S.clientes.length}</b> clientes, <b>${S.rutas.length}</b> rutas, <b>${Object.keys(S.jornadas).length}</b> jornadas y <b>${(S.documentos||[]).length}</b> documentos almacenados.</div>
     </div>
-    <button class="addbtn" style="border-color:var(--line);color:var(--muted)" onclick="exportData()">⬇️ Exportar copia (JSON)</button>
-    <button class="addbtn" style="border-color:var(--line);color:var(--muted)" onclick="document.getElementById('impFile').click()">⬆️ Importar copia</button>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:12px">
+      <button class="addbtn" style="border-color:var(--accent);color:var(--accent);margin:0" onclick="exportData()">${ic('database',16)} ⬇️ Descargar Backup (JSON)</button>
+      <button class="addbtn" style="border-color:var(--accent);color:var(--accent);margin:0" onclick="document.getElementById('impFile').click()">${ic('refresh',16)} ⬆️ Restaurar Backup</button>
+    </div>
     <input type="file" id="impFile" accept="application/json" class="hidden" onchange="importData(this)">
-    <button class="addbtn" style="border-color:var(--crit-soft);color:var(--crit)" onclick="resetDemo()">♻️ Reiniciar con datos demo</button>
-    <button class="addbtn" style="border-color:var(--crit-soft);color:var(--crit)" onclick="wipe()">🗑 Borrar todo</button>`;
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:10px">
+      <button class="addbtn" style="border-color:var(--crit-soft);color:var(--crit);margin:0" onclick="resetDemo()">♻️ Cargar datos demo</button>
+      <button class="addbtn" style="border-color:var(--crit-soft);color:var(--crit);margin:0" onclick="wipe()">🗑 Borrar todos los datos</button>
+    </div>`;
 }
 // TODO ERP-5/6/12: se completan en sus propios bloques; por ahora evitan que el router rompa la app.
 let gastosFiltro={desde:"",hasta:"",categoria:"",proveedorId:"",rutaId:"",importeMin:"",importeMax:""};
