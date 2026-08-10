@@ -1516,7 +1516,12 @@ function misGastos(){
 }
 /* ---- CLIENTES (vista de referencia para el técnico: sus clientes, buscador, contacto) ---- */
 let clientesTecQuery="";
-function setClientesTecQuery(v){ clientesTecQuery=v; renderClientesTecnico(); }
+function setClientesTecQuery(v){
+  clientesTecQuery=v;
+  renderClientesTecnico();
+  const inp = document.getElementById("tec_cli_search");
+  if(inp){ inp.focus(); inp.setSelectionRange(v.length, v.length); }
+}
 function renderClientesTecnico(){
   if(isAdmin()) return;
   const el=document.getElementById("viewClientes"); if(!el) return;
@@ -1532,7 +1537,7 @@ function renderClientesTecnico(){
         <div class="rd">${esc(r?r.nombre:"")} · ${esc(c.direccion||"")}</div></div>
       <span class="mtag mt-vio">🌸 ${esc(c.aroma||"—")}</span></div>`;
   }).join("");
-  el.innerHTML=`<input class="fld-inp" placeholder="Buscar cliente, dirección…" value="${esc(clientesTecQuery)}" oninput="setClientesTecQuery(this.value)">
+  el.innerHTML=`<input id="tec_cli_search" class="fld-inp" placeholder="Buscar cliente, dirección…" value="${esc(clientesTecQuery)}" oninput="setClientesTecQuery(this.value)">
     <div class="sec-t">Tus clientes <span class="cnt">${cs.length}</span></div>
     ${rows||`<div class="empty"><span class="ei">🏢</span>Sin resultados.</div>`}`;
 }
@@ -3496,7 +3501,20 @@ function reasignarRutaQuick(){
 }
 /* ---- inventario de difusores instalados (filtrable) ---- */
 let invFiltro={rutaId:"",modelo:"",cliente:"",tecnicoId:"",fecha:""};
-function setInvFiltro(k,v){ invFiltro[k]=v; drawInventario(); }
+function setInvFiltro(k,v){
+  invFiltro[k]=v;
+  if(k==="cliente"){
+    const container = document.getElementById("inv_rows_container");
+    if(container){
+      const filas = inventarioFilas();
+      container.innerHTML = filas.length ? filas.map(x=>`<div class="row"><div class="ri">🔌</div>
+        <div class="rm"><div class="rn">${esc(x.modelo)} · ${esc(x.cliente)}</div><div class="rd">${esc(x.ruta)} · ${esc(x.tecnico)}${x.fecha?" · alta "+fmtDate(x.fecha):""}</div></div></div>`).join("")
+        : `<div class="empty">Sin resultados</div>`;
+      return;
+    }
+  }
+  drawInventario();
+}
 function inventarioFilas(){
   const rows=[];
   S.clientes.forEach(c=>{ if(c.activo===false) return;
@@ -3524,8 +3542,8 @@ function drawInventario(){
       <div class="ff"><label>Técnico</label><select onchange="setInvFiltro('tecnicoId',this.value)">${opt("","Todos",f.tecnicoId)}${S.tecnicos.map(t=>opt(t.id,t.nombre,f.tecnicoId)).join("")}</select></div>
       <div class="ff"><label>Fecha alta</label><input type="date" value="${f.fecha}" onchange="setInvFiltro('fecha',this.value)"></div>
     </div>
-    <input class="fld-inp" placeholder="Buscar cliente…" value="${esc(f.cliente)}" oninput="setInvFiltro('cliente',this.value)">
-    <div style="max-height:48vh;overflow:auto;margin-top:10px">
+    <input id="inv_search_input" class="fld-inp" placeholder="Buscar cliente…" value="${esc(f.cliente)}" oninput="setInvFiltro('cliente',this.value)">
+    <div id="inv_rows_container" style="max-height:48vh;overflow:auto;margin-top:10px">
       ${filas.length?filas.map(x=>`<div class="row"><div class="ri">🔌</div>
         <div class="rm"><div class="rn">${esc(x.modelo)} · ${esc(x.cliente)}</div><div class="rd">${esc(x.ruta)} · ${esc(x.tecnico)}${x.fecha?" · alta "+fmtDate(x.fecha):""}</div></div></div>`).join("")
         :`<div class="empty">Sin resultados</div>`}
@@ -3679,7 +3697,12 @@ function delAroma(a){
 let clientesFiltro={rutaId:"",aroma:"",forma:"",sector:"",estado:"",tecnicoId:""};
 function setClF(k,v){ clientesFiltro[k]=v; renderAdmin(); }
 let clientesSearchQ="", clientesSort={key:"negocio",dir:1};
-function setClSearch(v){ clientesSearchQ=v; renderAdmin(); }
+function setClSearch(v){
+  clientesSearchQ=v;
+  renderAdmin();
+  const inp = document.getElementById("adm_cli_search");
+  if(inp){ inp.focus(); inp.setSelectionRange(v.length, v.length); }
+}
 function setClSort(key){ clientesSort.dir = (clientesSort.key===key) ? -clientesSort.dir : 1; clientesSort.key=key; renderAdmin(); }
 function descargarClientesCSV(){
   const f=clientesFiltro;
@@ -3787,7 +3810,7 @@ function admClientes(){
       <button onclick="descargarClientesCSV()"><span class="qi">${ic('file',15)}</span>Exportar Excel</button>
     </div>`;
   return quickbar+`<div class="sumcard" style="margin-bottom:14px">${resumen}</div>
-    <div class="search-wrap"><span class="sic-input">${ic('search',17)}</span><input class="fld-inp" placeholder="Buscar cliente, dirección, sector…" value="${esc(clientesSearchQ)}" oninput="setClSearch(this.value)"></div>
+    <div class="search-wrap"><span class="sic-input">${ic('search',17)}</span><input id="adm_cli_search" class="fld-inp" placeholder="Buscar cliente, dirección, sector…" value="${esc(clientesSearchQ)}" oninput="setClSearch(this.value)"></div>
     <div class="filtros">
       <div class="ff"><label>Ruta</label><select onchange="setClF('rutaId',this.value)">${opt("","Todas",f.rutaId)}${S.rutas.map(r=>opt(r.id,r.nombre,f.rutaId)).join("")}</select></div>
       <div class="ff"><label>Técnico</label><select onchange="setClF('tecnicoId',this.value)">${opt("","Todos",f.tecnicoId)}${S.tecnicos.map(t=>opt(t.id,t.nombre,f.tecnicoId)).join("")}</select></div>
