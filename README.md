@@ -5,6 +5,7 @@
 ## Estructura
 
 - `index.html` — Aplicación frontend completa (SPA autocontenida, funciona offline)
+- `presentacion.html` — Presentación web comercial e interactiva (Pitch Deck para clientes)
 - `logo.png` — Logo de la empresa
 - `backend/` — Backend local Node.js + SQLite (desarrollo/demostración)
   - `server.mjs` — Servidor API REST (Node ≥ 22, sin dependencias externas)
