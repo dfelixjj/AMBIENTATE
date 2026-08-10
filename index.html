@@ -3446,6 +3446,42 @@ function setClF(k,v){ clientesFiltro[k]=v; renderAdmin(); }
 let clientesSearchQ="", clientesSort={key:"negocio",dir:1};
 function setClSearch(v){ clientesSearchQ=v; renderAdmin(); }
 function setClSort(key){ clientesSort.dir = (clientesSort.key===key) ? -clientesSort.dir : 1; clientesSort.key=key; renderAdmin(); }
+function descargarClientesCSV(){
+  const f=clientesFiltro;
+  const list = S.clientes.filter(c=>{
+    if(f.rutaId && c.rutaId!==f.rutaId) return false;
+    if(f.aroma && c.aroma!==f.aroma) return false;
+    if(f.forma && c.formaHabitual!==f.forma) return false;
+    if(f.sector && c.sector!==f.sector) return false;
+    if(f.tecnicoId){ const r=S.rutas.find(x=>x.id===c.rutaId); if(!r||r.tecnicoId!==f.tecnicoId) return false; }
+    if(f.estado==="inactivo" && c.activo!==false) return false;
+    if(f.estado && f.estado!=="inactivo" && ((c.contrato&&c.contrato.estado)||"nuevo")!==f.estado) return false;
+    if(f.estado!=="inactivo" && c.activo===false) return false;
+    if(clientesSearchQ){ const q=clientesSearchQ.toLowerCase();
+      if(!(c.negocio+" "+(c.direccion||"")+" "+(c.sector||"")).toLowerCase().includes(q)) return false; }
+    return true;
+  });
+  const filas = [
+    ["CLIENTE / NEGOCIO", "RUTA", "SECTOR", "DIRECCIÓN", "TELÉFONO", "EMAIL", "AROMA", "DISPOSITIVOS", "FORMA DE PAGO", "IMPORTE (€)", "ESTADO"],
+    ...list.map(c=>{
+      const r = S.rutas.find(x=>x.id===c.rutaId);
+      return [
+        c.negocio||"",
+        r?r.nombre:"",
+        c.sector||"",
+        c.direccion||"",
+        c.telefono||"",
+        c.email||"",
+        c.aroma||"",
+        dispResumen(c)||"0",
+        c.formaHabitual||"efectivo",
+        eurPlano(c.importe),
+        c.activo===false?"Inactivo":((c.contrato&&c.contrato.estado)||"nuevo")
+      ];
+    })
+  ];
+  descargarCSV(`clientes-ambientate-${todayISO()}.csv`, filas);
+}
 function admClientes(){
   const f=clientesFiltro;
   const opt=(v,t,sel)=>`<option value="${v}" ${v===sel?"selected":""}>${t}</option>`;
@@ -3513,7 +3549,7 @@ function admClientes(){
       <button onclick="editCliente()"><span class="qi">${ic('plus',15)}</span>Nuevo cliente</button>
       <button onclick="pickClienteThen('Presupuesto aceptado','marcarAceptado')"><span class="qi">${ic('file',15)}</span>Presupuesto aceptado</button>
       <button onclick="pickClienteThen('Nueva instalación','editCliente')"><span class="qi">${ic('package',15)}</span>Nueva instalación</button>
-      <button onclick="pickClienteThen('Nueva incidencia','nuevaIncidenciaManual')"><span class="qi">${ic('alert',15)}</span>Nueva incidencia</button>
+      <button onclick="descargarClientesCSV()"><span class="qi">${ic('file',15)}</span>Exportar Excel</button>
     </div>`;
   return quickbar+`<div class="sumcard" style="margin-bottom:14px">${resumen}</div>
     <div class="search-wrap"><span class="sic-input">${ic('search',17)}</span><input class="fld-inp" placeholder="Buscar cliente, dirección, sector…" value="${esc(clientesSearchQ)}" oninput="setClSearch(this.value)"></div>
