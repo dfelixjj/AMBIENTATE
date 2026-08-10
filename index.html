@@ -3908,7 +3908,7 @@ function formSheet(title, fields, onSave){
   sh.innerHTML = `<div class="grab"></div><h2>${title}</h2>
     ${fields.map(f=>{
       if(f.type==="select"){
-        return `<label class="mini-lbl">${f.label}</label><select class="fld-inp" id="fld_${f.k}">${f.options.map(o=>`<option value="${o.v}" ${o.v===f.val?"selected":""}>${o.t}</option>`).join("")}</select>`;
+        return `<label class="mini-lbl">${f.label}</label><select class="fld-inp" id="fld_${f.k}">${f.options.map(o=>`<option value="${o.v}" ${String(o.v)===String(f.val)?"selected":""}>${o.t}</option>`).join("")}</select>`;
       }
       return `<label class="mini-lbl">${f.label}</label><input class="fld-inp" id="fld_${f.k}" type="${f.type||'text'}" inputmode="${f.type==='number'?'decimal':'text'}" value="${f.val??''}" placeholder="${f.ph||''}">`;
     }).join("")}
@@ -3926,9 +3926,17 @@ function editRuta(id){
     {k:"nombre",label:"Nombre de la ruta",val:r?r.nombre:"",ph:"Ruta Alcalá de Guadaíra"},
     {k:"municipio",label:"Municipio (para asignar cliente por dirección)",val:r?(r.municipio||""):"",ph:"Alcalá de Guadaíra"},
     {k:"tecnicoId",label:"Técnico asignado",type:"select",val:r?r.tecnicoId:(S.tecnicos[0]?.id||""),options:S.tecnicos.map(t=>({v:t.id,t:t.nombre}))},
-    {k:"fechaAncla",label:"Fecha ancla (inicio del ciclo de 28 días)",type:"date",val:r?r.fechaAncla:S.fecha},
+    {k:"fechaAncla",label:"Fecha de inicio de la ruta (Ancla)",type:"date",val:r?r.fechaAncla:S.fecha},
+    {k:"frecuenciaDias",label:"Frecuencia de repetición del ciclo",type:"select",val:r?(r.frecuenciaDias||28):28,options:[
+      {v:21, t:"Cada 21 días (3 semanas)"},
+      {v:28, t:"Cada 28 días (4 semanas - estándar)"},
+      {v:56, t:"Cada 56 días (8 semanas - bimensual)"},
+      {v:14, t:"Cada 14 días (2 semanas)"},
+      {v:7, t:"Cada 7 días (semanal)"}
+    ]}
   ],vals=>{
     if(!vals.nombre.trim()) return;
+    vals.frecuenciaDias = Number(vals.frecuenciaDias) || 28;
     if(r){ Object.assign(r,vals); } else { S.rutas.push({id:uid(),...vals}); }
   });
 }
