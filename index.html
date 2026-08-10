@@ -3541,7 +3541,7 @@ function setAromaCompra(nombre, formato, val){
   S.aromaCompra[nombre][formato]=parseFloat(val)||0;
   save();
 }
-function setFormatoVenta(formato, val){ S.formatoVenta[formato]=parseFloat(val)||0; save(); renderAdmin(); }
+function setFormatoVenta(formato, val){ S.formatoVenta[formato]=parseFloat(val)||0; save(); }
 function admAromasDifusores(){
   const f=aromasFiltro;
   const opt=(v,t,sel)=>`<option value="${v}" ${v===sel?"selected":""}>${t}</option>`;
@@ -3584,13 +3584,13 @@ function admAromasDifusores(){
       <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:8px">
         ${esBacter?"":`<div style="display:flex;flex-direction:column;gap:2px">
           <label class="mini-lbl" style="margin:0">Compra €/L nebulización</label>
-          <input type="number" inputmode="decimal" value="${compraNebu||""}" placeholder="€/L" oninput="setAromaCompra('${a.replace(/'/g,"\\'")}','Litro nebulización',this.value)"
+          <input type="number" inputmode="decimal" value="${compraNebu||""}" placeholder="€/L" oninput="setAromaCompra('${a.replace(/'/g,"\\'")}','Litro nebulización',this.value)" onchange="renderAdmin()"
             style="width:90px;border:1px solid var(--line);border-radius:8px;padding:5px 7px;background:var(--surface-2);color:var(--ink);font-size:12px">
           <span style="font-size:11px;color:${margenNebu>=0?'var(--good)':'var(--crit)'}">margen ${EUR(margenNebu)}/L</span>
         </div>`}
         <div style="display:flex;flex-direction:column;gap:2px">
           <label class="mini-lbl" style="margin:0">Compra €/${esBacter?"bote bacteriostático":"bote hidroalcohólico"}</label>
-          <input type="number" inputmode="decimal" value="${compraBote||""}" placeholder="€/bote" oninput="setAromaCompra('${a.replace(/'/g,"\\'")}','${esBacter?"Bacteriostático":"Bote hidroalcohólico"}',this.value)"
+          <input type="number" inputmode="decimal" value="${compraBote||""}" placeholder="€/bote" oninput="setAromaCompra('${a.replace(/'/g,"\\'")}','${esBacter?"Bacteriostático":"Bote hidroalcohólico"}',this.value)" onchange="renderAdmin()"
             style="width:90px;border:1px solid var(--line);border-radius:8px;padding:5px 7px;background:var(--surface-2);color:var(--ink);font-size:12px">
           <span style="font-size:11px;color:${margenBote>=0?'var(--good)':'var(--crit)'}">margen ${EUR(margenBote)}/bote</span>
         </div>
@@ -3601,7 +3601,7 @@ function admAromasDifusores(){
     <button class="addbtn" onclick="addAroma()">＋ Añadir aroma</button>
     <div class="sec-t">Precio de venta de referencia por formato</div>
     <div class="sumcard">${FORMATOS_PRODUCTO.map(fo=>`<div class="suml"><div class="sl">${fo}</div><div class="sv">
-      <input type="number" inputmode="decimal" value="${S.formatoVenta[fo]||""}" oninput="setFormatoVenta('${fo}',this.value)"
+      <input type="number" inputmode="decimal" value="${S.formatoVenta[fo]||""}" oninput="setFormatoVenta('${fo}',this.value)" onchange="renderAdmin()"
         style="width:80px;border:1px solid var(--line);border-radius:8px;padding:5px 7px;background:var(--surface-2);color:var(--ink);font-size:12px;text-align:right"> €</div></div>`).join("")}</div>
     <div class="sec-t">Estadísticas de uso, compra y margen</div>
     <div class="filtros">
