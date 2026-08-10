@@ -826,10 +826,11 @@ function load(){
     (s.rutas||[]).forEach(r=>{ if(r.municipio===undefined) r.municipio=""; });
     if(!s.numeracion) s.numeracion={factura:{prefijo:"FAC-",siguiente:1},presupuesto:{prefijo:"PRE-",siguiente:1},albaran:{prefijo:"ALB-",siguiente:1}};
     (s.tecnicos||[]).forEach(t=>{
-      if(t.id==="t1" && (t.nombre==="Juan Martín"||!t.nombre)) t.nombre="Técnico 1";
-      if(t.id==="t2" && (t.nombre==="Ana López"||!t.nombre)) t.nombre="Técnico 2";
-      if(t.id==="t3" && (t.nombre==="Marta Ruiz"||!t.nombre)) t.nombre="Técnico 3";
+      if(t.id==="t1" || t.nombre==="Juan Martín") t.nombre="Técnico 1";
+      if(t.id==="t2" || t.nombre==="Ana López") t.nombre="Técnico 2";
+      if(t.id==="t3" || t.nombre==="Marta Ruiz") t.nombre="Técnico 3";
     });
+    try{ localStorage.setItem(LS_KEY, JSON.stringify(s)); }catch(err){}
     return s; } }catch(e){}
   return seed();
 }
@@ -4217,7 +4218,7 @@ function delCliente(id){ askConfirm("¿Borrar este cliente?", ()=>{ S.clientes=S
 function editTecnico(id){
   const t = id?tecnico(id):null;
   formSheet(t?"Editar técnico":"Nuevo técnico",[
-    {k:"nombre",label:"Nombre",val:t?t.nombre:"",ph:"Juan Martín"},
+    {k:"nombre",label:"Nombre del técnico",val:t?t.nombre:"",ph:"Técnico 1"},
     {k:"tel",label:"Teléfono",val:t?t.tel:"",ph:"600 000 000"},
     {k:"clave",label:"Clave de acceso",val:t?t.clave:"1234",ph:"1234"},
     {k:"horasMensuales",label:"Horas mensuales objetivo",type:"number",val:t?(t.horasMensuales||160):160},
