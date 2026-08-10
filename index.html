@@ -417,11 +417,62 @@
   .adm-tabs button{display:flex;align-items:center;gap:8px;padding:8px 15px;border-radius:999px;font-weight:700;font-size:13px;
     background:var(--surface);border:1px solid var(--line);color:var(--muted);white-space:nowrap}
   .adm-tabs button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
-  /* barra de accesos rápidos, siempre arriba del módulo */
+
+  /* Selector de navegación móvil de Administración */
+  .adm-mobile-nav{display:block;margin-bottom:16px}
+  .adm-nav-dropdown{width:100%;display:flex;align-items:center;justify-content:space-between;padding:12px 16px;
+    background:var(--surface);border:1.5px solid var(--line-strong);border-radius:16px;box-shadow:var(--shadow-sm);
+    cursor:pointer;transition:transform .15s var(--ease),border-color .15s var(--ease);color:var(--ink)}
+  .adm-nav-dropdown:active{transform:scale(.98)}
+  .adm-nav-dropdown .sec-left{display:flex;align-items:center;gap:10px;font-weight:800;font-size:15.5px;color:var(--ink)}
+  .adm-nav-dropdown .sec-left .ic-box{width:34px;height:34px;border-radius:10px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;flex:none}
+  .adm-nav-dropdown .sec-right{display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:999px;background:var(--accent);color:#fff;font-weight:700;font-size:12.5px;box-shadow:0 2px 8px color-mix(in srgb,var(--accent) 30%,transparent)}
+
+  /* Modal de menú a pantalla completa (full-screen overlay) */
+  .adm-menu-overlay{position:fixed;inset:0;z-index:100;background:rgba(15,23,42,0.65);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+    display:flex;flex-direction:column;opacity:0;pointer-events:none;transition:opacity .25s var(--ease)}
+  .adm-menu-overlay.open{opacity:1;pointer-events:auto}
+  .adm-menu-modal{background:var(--bg);width:100%;height:100%;max-width:100%;display:flex;flex-direction:column;overflow-y:auto;
+    padding:calc(var(--safe-t) + 16px) 20px 40px;box-sizing:border-box;animation:slideUp .3s var(--ease)}
+  .adm-menu-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding-bottom:14px;border-bottom:1px solid var(--line)}
+  .adm-menu-head h2{font-size:22px;font-weight:800;margin:0;color:var(--ink);letter-spacing:-0.01em}
+  .adm-menu-head p{font-size:13px;color:var(--muted);margin:3px 0 0}
+  .adm-menu-close{width:40px;height:40px;border-radius:50%;background:var(--surface-2);border:1px solid var(--line);color:var(--ink);
+    display:grid;place-items:center;cursor:pointer;flex:none;transition:transform .15s,background .15s}
+  .adm-menu-close:active{transform:scale(.92)}
+  .adm-menu-grid{display:grid;grid-template-columns:1fr;gap:11px}
+  @media (min-width:540px){.adm-menu-grid{grid-template-columns:repeat(2,1fr)}}
+  @media (min-width:800px){.adm-menu-grid{grid-template-columns:repeat(3,1fr)}}
+  .adm-menu-card{display:flex;align-items:center;gap:14px;padding:15px;background:var(--surface);border:1.5px solid var(--line);
+    border-radius:16px;text-align:left;cursor:pointer;box-shadow:var(--shadow-sm);transition:transform .15s var(--ease),border-color .15s var(--ease),box-shadow .15s var(--ease);position:relative}
+  .adm-menu-card:active{transform:scale(.98)}
+  .adm-menu-card.active{border-color:var(--accent);background:var(--accent-soft);box-shadow:0 4px 14px color-mix(in srgb,var(--accent) 20%,transparent)}
+  .adm-menu-icon{width:44px;height:44px;border-radius:12px;background:var(--surface-2);color:var(--accent);display:grid;place-items:center;flex:none}
+  .adm-menu-card.active .adm-menu-icon{background:var(--accent);color:#fff}
+  .adm-menu-info{flex:1;min-width:0}
+  .adm-menu-title{font-weight:800;font-size:15px;color:var(--ink)}
+  .adm-menu-desc{font-size:12px;color:var(--muted);margin-top:2px;line-height:1.35}
+  .adm-menu-badge{display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:999px;background:var(--accent);color:#fff;font-size:11px;font-weight:700;flex:none}
+
+  /* barra de accesos rápidos: centrado simétrico en móvil */
   .quickbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
   .quickbar button{display:flex;align-items:center;gap:7px;padding:10px 14px;border-radius:12px;
-    background:var(--accent-soft);color:var(--accent-ink);font-weight:700;font-size:13px;border:1px solid transparent}
+    background:var(--accent-soft);color:var(--accent-ink);font-weight:700;font-size:13px;border:1px solid transparent;transition:transform .15s var(--ease),background .15s var(--ease)}
   .quickbar .qi{font-size:15px;display:flex}
+  @media (max-width:899px){
+    .adm-tabs{display:none!important}
+    .quickbar{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:18px;width:100%}
+    .quickbar button{justify-content:center;text-align:center;padding:13px 10px;width:100%;font-size:13.5px;border-radius:14px;box-shadow:var(--shadow-sm)}
+    .quickbar button:active{transform:scale(.97)}
+  }
+  @media (min-width:900px){
+    .adm-mobile-nav{display:none!important}
+    .adm-tabs{display:flex!important}
+  }
+
+  /* botones corporativos de compartir documentos */
+  .btn-share-email{background:var(--navy);color:#fff;border-radius:10px;padding:10px 16px;font-weight:700;font-size:13.5px;border:none;display:inline-flex;align-items:center;gap:7px;cursor:pointer}
+  .btn-share-msg{background:var(--accent);color:#fff;border-radius:10px;padding:10px 16px;font-weight:700;font-size:13.5px;border:none;display:inline-flex;align-items:center;gap:7px;cursor:pointer}
   .row{display:flex;align-items:center;gap:12px;padding:13px 14px;background:var(--surface);
     border:1px solid var(--line);border-radius:14px;margin-bottom:8px;box-shadow:var(--shadow)}
   .row .ri{width:38px;height:38px;border-radius:10px;background:var(--accent-soft);color:var(--accent-ink);
@@ -1114,6 +1165,10 @@ const ICONS = {
   paperclip:'<path d="M7 12.5 15.5 4a3.5 3.5 0 0 1 5 5L11 18.5a5.5 5.5 0 0 1-8-8L11.5 3"/>',
   truck:'<rect x="2" y="7" width="12" height="10" rx="1.5"/><path d="M14 10.5h4.5L21 13.5V17h-3"/><circle cx="7" cy="18.5" r="1.8"/><circle cx="17" cy="18.5" r="1.8"/>',
   car:'<path d="M4.5 16.5V12l2-4.5h11l2 4.5v4.5"/><path d="M4.5 16.5h15"/><circle cx="7.5" cy="16.5" r="1.7"/><circle cx="16.5" cy="16.5" r="1.7"/><path d="M4.5 12h15"/>',
+  messageSquare:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+  chevronDown:'<path d="m6 9 6 6 6-6"/>',
+  grid:'<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/>',
+  menu:'<path d="M4 6h16M4 12h16M4 18h16"/>',
 };
 function ic(name, size, cls){
   const s=size||18;
@@ -2282,10 +2337,10 @@ function docShareActions(c, asunto){
   const email=(c&&c.email)||""; const tel=((c&&c.telefono)||"").replace(/\D/g,"");
   const body=encodeURIComponent(`Adjuntamos el documento de ${asunto}. Gracias por confiar en AMBIÉNTATE.`);
   const mailHref = email?`mailto:${email}?subject=${encodeURIComponent(asunto)}&body=${body}`:"";
-  const waHref = tel?`https://wa.me/34${tel}?text=${body}`:"";
+  const msgHref = tel?`https://wa.me/34${tel}?text=${body}`:"";
   return `<div class="noprint" style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
-    ${email?`<a href="${mailHref}"><button type="button">✉️ Enviar por email</button></a>`:`<span class="muted" style="font-size:13px">Sin email del cliente</span>`}
-    ${tel?`<a href="${waHref}" target="_blank" rel="noopener"><button type="button" style="background:#25D366">💬 WhatsApp</button></a>`:""}
+    ${email?`<a href="${mailHref}"><button type="button" class="btn-share-email">${ic('mail',15)} Enviar por email</button></a>`:`<span class="muted" style="font-size:13px">Sin email del cliente</span>`}
+    ${tel?`<a href="${msgHref}" target="_blank" rel="noopener"><button type="button" class="btn-share-msg">${ic('messageSquare',15)} Enviar por mensaje</button></a>`:""}
   </div>`;
 }
 
@@ -2469,25 +2524,105 @@ function adminShellHead(){
     </div>
   </div>`;
 }
+const ADMIN_SECTIONS = [
+  { id: 'dashboard', label: 'Panel', icon: 'dashboard', desc: 'Resumen general y KPIs' },
+  { id: 'calendario', label: 'Calendario', icon: 'calendar', desc: 'Ciclo de 28 días y rutas' },
+  { id: 'clientes', label: 'Clientes', icon: 'building', desc: 'Gestión de empresas y servicios' },
+  { id: 'documentos', label: 'Facturas', icon: 'receipt', desc: 'Facturación e ingresos' },
+  { id: 'gastos', label: 'Gastos', icon: 'wallet', desc: 'Control de costes y pagos' },
+  { id: 'contabilidad', label: 'Contabilidad', icon: 'chart', desc: 'Resultados de explotación' },
+  { id: 'incidencias', label: 'Incidencias', icon: 'alert', desc: 'Partes de trabajo y avisos' },
+  { id: 'consumo', label: 'Consumo', icon: 'flask', desc: 'Estadísticas de aromas' },
+  { id: 'rutas', label: 'Rutas', icon: 'route', desc: 'Recorridos y planificación' },
+  { id: 'aromas', label: 'Aromas y Difusores', icon: 'droplet', desc: 'Catálogo de fragancias' },
+  { id: 'tecnicos', label: 'Técnicos', icon: 'hardhat', desc: 'Equipo y licencias' },
+  { id: 'config', label: 'Configuración', icon: 'settings', desc: 'Ajustes y datos empresa' },
+];
+
+let adminMenuOpen = false;
+
+function toggleAdminMenu(show){
+  adminMenuOpen = show !== undefined ? show : !adminMenuOpen;
+  const overlay = document.getElementById("admMenuModal");
+  if(overlay){
+    if(adminMenuOpen){
+      overlay.classList.add("open");
+      document.body.style.overflow = "hidden";
+    } else {
+      overlay.classList.remove("open");
+      document.body.style.overflow = "";
+    }
+  }
+}
+
+function selectAdminTab(tabId){
+  admTab = tabId;
+  toggleAdminMenu(false);
+  renderAdmin();
+}
+
+window.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && adminMenuOpen) {
+    toggleAdminMenu(false);
+  }
+});
+
 function renderAdmin(){
+  const activeSec = ADMIN_SECTIONS.find(s=>s.id===admTab) || ADMIN_SECTIONS[0];
   const el = document.getElementById("viewAdmin");
   el.innerHTML = `
+    <!-- Selector móvil de sección (reemplaza tira horizontal) -->
+    <div class="adm-mobile-nav">
+      <button type="button" class="adm-nav-dropdown" onclick="toggleAdminMenu(true)">
+        <div class="sec-left">
+          <div class="ic-box">${ic(activeSec.icon, 18)}</div>
+          <span>${activeSec.label}</span>
+        </div>
+        <div class="sec-right">
+          <span>Opciones</span>
+          ${ic('chevronDown', 15)}
+        </div>
+      </button>
+    </div>
+
+    <!-- Menú lateral (Escritorio >=900px) -->
     <div class="adm-tabs">
       ${adminShellHead()}
-      <button class="${admTab==='dashboard'?'on':''}" onclick="admTab='dashboard';renderAdmin()">${ic('dashboard',17)} Panel</button>
-      <button class="${admTab==='calendario'?'on':''}" onclick="admTab='calendario';renderAdmin()">${ic('calendar',17)} Calendario</button>
-      <button class="${admTab==='clientes'?'on':''}" onclick="admTab='clientes';renderAdmin()">${ic('building',17)} Clientes</button>
-      <button class="${admTab==='documentos'?'on':''}" onclick="admTab='documentos';renderAdmin()">${ic('receipt',17)} Facturas</button>
-      <button class="${admTab==='gastos'?'on':''}" onclick="admTab='gastos';renderAdmin()">${ic('wallet',17)} Gastos</button>
-      <button class="${admTab==='contabilidad'?'on':''}" onclick="admTab='contabilidad';renderAdmin()">${ic('chart',17)} Contabilidad</button>
-      <button class="${admTab==='incidencias'?'on':''}" onclick="admTab='incidencias';renderAdmin()">${ic('alert',17)} Incidencias</button>
-      <button class="${admTab==='consumo'?'on':''}" onclick="admTab='consumo';renderAdmin()">${ic('flask',17)} Consumo</button>
-      <button class="${admTab==='rutas'?'on':''}" onclick="admTab='rutas';renderAdmin()">${ic('route',17)} Rutas</button>
-      <button class="${admTab==='aromas'?'on':''}" onclick="admTab='aromas';renderAdmin()">${ic('droplet',17)} Aromas y Difusores</button>
-      <button class="${admTab==='tecnicos'?'on':''}" onclick="admTab='tecnicos';renderAdmin()">${ic('hardhat',17)} Técnicos</button>
-      <button class="${admTab==='config'?'on':''}" onclick="admTab='config';renderAdmin()">${ic('settings',17)} Configuración</button>
+      ${ADMIN_SECTIONS.map(s => `
+        <button class="${admTab===s.id?'on':''}" onclick="selectAdminTab('${s.id}')">
+          ${ic(s.icon, 17)} ${s.label}
+        </button>
+      `).join('')}
     </div>
-    <div id="admBody" class="view"></div>`;
+
+    <!-- Contenido del módulo activo -->
+    <div id="admBody" class="view"></div>
+
+    <!-- Modal desplegable a pantalla completa -->
+    <div id="admMenuModal" class="adm-menu-overlay ${adminMenuOpen?'open':''}" onclick="if(event.target===this) toggleAdminMenu(false)">
+      <div class="adm-menu-modal">
+        <div class="adm-menu-head">
+          <div>
+            <h2>Menú de Administración</h2>
+            <p>Selecciona una sección para continuar</p>
+          </div>
+          <button type="button" class="adm-menu-close" onclick="toggleAdminMenu(false)" aria-label="Cerrar menú">${ic('close', 20)}</button>
+        </div>
+        <div class="adm-menu-grid">
+          ${ADMIN_SECTIONS.map(s => `
+            <button type="button" class="adm-menu-card ${admTab===s.id?'active':''}" onclick="selectAdminTab('${s.id}')">
+              <div class="adm-menu-icon">${ic(s.icon, 22)}</div>
+              <div class="adm-menu-info">
+                <div class="adm-menu-title">${s.label}</div>
+                <div class="adm-menu-desc">${s.desc}</div>
+              </div>
+              ${admTab===s.id ? `<div class="adm-menu-badge">${ic('check', 13)} Activo</div>` : ''}
+            </button>
+          `).join('')}
+        </div>
+      </div>
+    </div>`;
+
   const b = document.getElementById("admBody");
   if(admTab==="dashboard") b.innerHTML = admDashboard();
   else if(admTab==="calendario") b.innerHTML = admCalendario();
@@ -2892,7 +3027,7 @@ function admFacturas(){
     </div>
     ${(f.tipo||f.clienteId||f.rutaId||f.estado||f.desde||f.hasta||f.importeMin||f.importeMax)?`<button class="addbtn" style="margin-bottom:8px" onclick="facturasFiltro={tipo:'',clienteId:'',rutaId:'',estado:'',desde:'',hasta:'',importeMin:'',importeMax:''};renderAdmin()">✕ Quitar filtros</button>`:""}
     <div class="row" style="display:block;padding:14px;margin-bottom:10px">
-      <div class="rd" style="line-height:1.6">Cada documento se genera como PDF descargable con firma incrustada cuando aplica. El envío por email/WhatsApp se prepara ya redactado, pero lo envía el técnico o tú pulsando el botón — un servidor de correo propio (fase de backend) permitiría el envío 100% automático. Los "adjuntos" (contratos, certificados, informes) se guardan como imagen dentro del propio documento.</div>
+      <div class="rd" style="line-height:1.6">Cada documento se genera como PDF descargable con firma incrustada cuando aplica. El envío por email/mensaje directo se prepara ya redactado, pero lo envía el técnico o tú pulsando el botón — un servidor de correo propio (fase de backend) permitiría el envío 100% automático. Los "adjuntos" (contratos, certificados, informes) se guardan como imagen dentro del propio documento.</div>
     </div>
     <div class="sec-t">Documentos <span class="cnt">${docs.length}</span></div>
     ${rows||`<div class="empty"><span class="ei">📄</span>Sin documentos para el filtro.</div>`}`;
