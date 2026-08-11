@@ -1399,6 +1399,12 @@ function renderInicio(){
   const jornadaIniciada = !isAdmin() && !!fichajeHoy();
   const el = document.getElementById("viewInicio");
   el.innerHTML = `
+    ${!isAdmin()?`<div class="row" style="display:block;padding:12px;background:var(--surface-2);border-radius:10px;margin-bottom:12px;border:1px solid var(--line)">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <div style="font-size:12.5px;color:var(--muted)">👤 Modo Técnico activo (<b>${esc(tecnico(S.session?.tecnicoId)?.nombre||"Técnico")}</b>)</div>
+        <button class="mtag mt-acc" onclick="doLogin('admin',null)">🔑 Cambiar a Modo Administrador</button>
+      </div>
+    </div>`:""}
     ${jornadaIniciada?"":fichajeCard()}
     <div class="kpis">
       <div class="kpi"><div class="n" style="color:var(--good)">${st.realizadas}<span style="font-size:16px;color:var(--faint)">/${st.programados}</span></div><div class="l">Visitas hechas</div></div>
@@ -4902,7 +4908,7 @@ function applyRole(){
 
 /* ---- navegación ---- */
 function switchTab(name){
-  if(name==="Admin" && !isAdmin()){ name="Inicio"; }
+  if(name==="Admin" && !isAdmin()){ pedirClave('admin'); return; }
   if((name==="Gastos"||name==="Clientes") && isAdmin()){ name="Admin"; }
   if((name==="Inicio"||name==="Caja") && isAdmin()){ name="Admin"; } // el admin no ejecuta rutas
   currentTab=name;
