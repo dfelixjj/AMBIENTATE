@@ -4987,46 +4987,44 @@ window.addEventListener("pagehide", save);
 window.addEventListener("beforeunload", save);
 
 /* ---- init ---- */
-// Primero intenta cargar del servidor; si falla usa localStorage (ya cargado en S)
-(async function initApp() {
+// 1. Renderizado instantáneo (0 ms) con los datos locales para evitar pantalla fija en blanco
+try {
+  if(!S.fecha) S.fecha = todayISO();
+  if(!S.rutaSel) S.rutaSel = S.rutas[0]?.id;
+  autoCloseCheck();
+  if(!S.session || !S.session.role){
+    S.session = { role: "admin", tecnicoId: null };
+  }
+  renderAll();
+  switchTab(S.session.role === "admin" ? "Admin" : "Inicio");
+} catch(initErr) {
+  console.error("Error en el render inicial:", initErr);
+  S = seed();
+  S.session = { role: "admin", tecnicoId: null };
+  renderAll();
+  switchTab("Admin");
+}
+
+// 2. Sincronización asíncrona con el servidor en segundo plano (sin bloquear la interfaz)
+(async function syncAppWithServer() {
   try {
-    // Intentar cargar estado del servidor
     const serverState = await loadFromServer();
     if (serverState) {
-      // Preservar la sesión local (no viene del servidor)
       const localSession = S.session;
       const localFecha = S.fecha;
       const localRutaSel = S.rutaSel;
       S = serverState;
       patchState(S);
-      // Restaurar sesión y fecha local
       if (localSession && localSession.role) S.session = localSession;
       if (localFecha) S.fecha = localFecha;
       if (localRutaSel) S.rutaSel = localRutaSel;
-      // Guardar en localStorage como cache
       try { localStorage.setItem(LS_KEY, JSON.stringify(S)); } catch(e) {}
-      console.log('✓ Datos cargados del servidor');
-    } else {
-      console.log('⚠ Servidor no disponible, usando datos locales');
+      renderAll();
+      switchTab(S.session.role === "admin" ? "Admin" : "Inicio");
+      console.log('✓ Datos sincronizados con el servidor');
     }
-
-    if(!S.fecha) S.fecha = todayISO();
-    if(!S.rutaSel) S.rutaSel = S.rutas[0]?.id;
-    autoCloseCheck();
-    if(!S.session || !S.session.role){
-      S.session = { role: "admin", tecnicoId: null };
-      save();
-    }
-    renderAll();
-    switchTab(S.session.role === "admin" ? "Admin" : "Inicio");
-  } catch(initErr) {
-    console.error("Error en la inicialización:", initErr);
-    try { localStorage.removeItem(LS_KEY); } catch(e){}
-    S = seed();
-    S.session = { role: "admin", tecnicoId: null };
-    save();
-    renderAll();
-    switchTab("Admin");
+  } catch(syncErr) {
+    console.warn("Sincronización en segundo plano no completada:", syncErr);
   }
 })();
 </script>
