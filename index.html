@@ -4174,6 +4174,146 @@ function setIvaPct(v){ S.ivaPct=parseFloat(v)||21; save(); renderAdmin(); }
 function setNumeracion(tipo,campo,v){ S.numeracion=S.numeracion||{}; S.numeracion[tipo]=S.numeracion[tipo]||{prefijo:"",siguiente:1};
   S.numeracion[tipo][campo]= campo==="siguiente"?(parseInt(v)||1):v; save(); }
 
+/* ==================== AUDITORÍA Y REGISTRO DE ACCESOS ==================== */
+let accesosDesbloqueados = false;
+
+function detectDispositivo(){
+  const ua = navigator.userAgent;
+  let os = "Dispositivo Web";
+  if (/iPhone|iPad|iPod/i.test(ua)) os = "📱 iPhone / iPad (iOS)";
+  else if (/Android/i.test(ua)) os = "📱 Teléfono Android";
+  else if (/Macintosh|Mac OS X/i.test(ua)) os = "💻 Mac (macOS)";
+  else if (/Windows/i.test(ua)) os = "💻 PC Windows";
+
+  let browser = "";
+  if (/Chrome|CriOS/i.test(ua)) browser = "Chrome";
+  else if (/Safari/i.test(ua) && !/Chrome/i.test(ua)) browser = "Safari";
+  else if (/Firefox/i.test(ua)) browser = "Firefox";
+  else if (/Edg/i.test(ua)) browser = "Edge";
+
+  return browser ? `${os} · ${browser}` : os;
+}
+
+function regAcceso(role, tecnicoId){
+  S.accesos = S.accesos || [];
+  const now = new Date();
+  const fechaHora = now.toLocaleDateString("es-ES") + " " + now.toLocaleTimeString("es-ES", {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+  const tObj = tecnico(tecnicoId);
+  const usuarioNombre = role === "admin" ? "Administrador" : (tObj ? tObj.nombre : "Técnico");
+  
+  const nuevoAcceso = {
+    id: uid(),
+    fechaIso: now.toISOString(),
+    fechaHora: fechaHora,
+    rol: role,
+    usuario: usuarioNombre,
+    dispositivo: detectDispositivo(),
+    ubicacion: "Detectando ciudad / IP..."
+  };
+
+  S.accesos.unshift(nuevoAcceso);
+  if(S.accesos.length > 200) S.accesos = S.accesos.slice(0, 200);
+  save();
+
+  fetch("https://ipapi.co/json/")
+    .then(r => r.json())
+    .then(data => {
+      if(data && (data.city || data.country_name || data.ip)){
+        nuevoAcceso.ubicacion = `${data.city || ""}${data.city && data.country_name ? ", " : ""}${data.country_name || ""} (${data.ip || ""})`.trim();
+        save();
+        if(admTab === "datos" && accesosDesbloqueados) renderAdmin();
+      }
+    })
+    .catch(() => {
+      nuevoAcceso.ubicacion = "Acceso Web (IP reservada)";
+      save();
+    });
+}
+
+function desbloquearAccesos(){
+  formSheet("Acceso Protegido a Auditoría", [
+    {k: "claveEspecial", label: "Introduce la contraseña especial de seguridad (1703)", type: "password", ph: "PIN 1703"}
+  ], vals => {
+    if(String(vals.claveEspecial).trim() === "1703"){
+      accesosDesbloqueados = true;
+      renderAdmin();
+      toast("🔓 Registro de accesos desbloqueado");
+    } else {
+      toast("❌ Contraseña incorrecta (requiere 1703)");
+    }
+  });
+}
+
+function descargarAccesosCSV(){
+  const filas = [
+    ["REGISTRO DE ACCESOS Y AUDITORÍA DE SEGURIDAD"],
+    ["Generado", new Date().toLocaleString("es-ES")],
+    [],
+    ["FECHA Y HORA", "USUARIO / PERFIL", "DISPOSITIVO Y NAVEGADOR", "UBICACIÓN / IP"],
+    ...(S.accesos||[]).map(a => [
+      a.fechaHora || a.fechaIso,
+      a.usuario || a.rol,
+      a.dispositivo || "",
+      a.ubicacion || ""
+    ])
+  ];
+  descargarCSV(`auditoria-accesos-${todayISO()}.csv`, filas);
+}
+
+function borrarHistorialAccesos(){
+  askConfirm("¿Deseas borrar todo el historial de registros de acceso?", () => {
+    S.accesos = [];
+    save();
+    renderAdmin();
+    toast("🗑️ Historial de accesos borrado");
+  }, true);
+}
+
+function htmlRegistroAccesos(){
+  return `<div class="sec-t">📜 Registro de Accesos y Auditoría de Seguridad</div>
+  ${!accesosDesbloqueados ? `
+    <div class="row" style="display:block;padding:20px;text-align:center;background:var(--surface);border-radius:12px;border:1px solid var(--line);margin-bottom:12px">
+      <div style="font-size:36px;margin-bottom:8px">🔒</div>
+      <div class="rn" style="font-size:16px;margin-bottom:6px">Zona Protegida de Auditoría</div>
+      <div class="rd" style="line-height:1.6;margin-bottom:14px">Se requiere la contraseña especial de seguridad para consultar quién y desde qué dispositivo han accedido con las claves.</div>
+      <button class="addbtn" style="border-color:var(--accent);color:var(--accent);font-weight:700;margin:0 auto;display:inline-flex;align-items:center;gap:6px" onclick="desbloquearAccesos()">🔑 Introducir clave de auditoría (1703)</button>
+    </div>
+  ` : `
+    <div class="row" style="display:block;padding:14px;margin-bottom:12px;background:var(--surface);border-radius:12px;border:1px solid var(--line)">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <div>
+          <div class="rn" style="font-size:15px">📜 Historial de Inicios de Sesión</div>
+          <div class="rd"><b>${(S.accesos||[]).length}</b> accesos registrados.</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="mtag mt-acc" onclick="descargarAccesosCSV()">📄 Exportar a Excel</button>
+          <button class="mtag mt-crit" onclick="borrarHistorialAccesos()">🗑️ Limpiar historial</button>
+        </div>
+      </div>
+    </div>
+    <div class="dtable-wrap" style="max-height:360px;overflow:auto;margin-bottom:14px">
+      <table class="dtable">
+        <thead>
+          <tr>
+            <th>Fecha y Hora</th>
+            <th>Usuario / Perfil</th>
+            <th>Dispositivo / Navegador</th>
+            <th>Ubicación / IP</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${(S.accesos||[]).length ? (S.accesos||[]).map(a => `<tr>
+            <td><b>${esc(a.fechaHora||a.fechaIso)}</b></td>
+            <td><span class="mtag ${a.rol==='admin'?'mt-acc':'mt-vio'}">${esc(a.usuario||a.rol)}</span></td>
+            <td>${esc(a.dispositivo||"—")}</td>
+            <td>📍 ${esc(a.ubicacion||"—")}</td>
+          </tr>`).join("") : `<tr><td colspan="4" style="text-align:center;color:var(--faint);padding:16px">Sin registros de acceso.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  `}`;
+}
+
 function admConfiguracion(){
   const emp=S.empresa||DEFAULT_EMPRESA;
   const vehRows=(S.vehiculos||[]).map(v=>{ const t=tecnico(v.tecnicoId);
@@ -4226,6 +4366,7 @@ function admConfiguracion(){
     <div class="sec-t">🚚 Proveedores <span class="cnt">${nProv}</span></div>
     <button class="addbtn" style="border-color:var(--accent);color:var(--accent)" onclick="admTab='gastos';renderAdmin()">Ver proveedores en Gastos →</button>
 
+    ${htmlRegistroAccesos()}
     ${admDatos()}`;
 }
 
@@ -4714,6 +4855,7 @@ function validarClave(role, tecnicoId){
 }
 function doLogin(role, tecnicoId){
   S.session = {role, tecnicoId: tecnicoId||null};
+  regAcceso(role, tecnicoId||null);
   const rs = availableRutas();
   if(!rs.find(r=>r.id===S.rutaSel)) S.rutaSel = rs[0] ? rs[0].id : null;
   save();
