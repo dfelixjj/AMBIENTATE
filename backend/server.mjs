@@ -67,7 +67,7 @@ function migrate() {
 
   -- Tablas nuevas (Fase 1)
   create table if not exists documentos (id text primary key, numero text, tipo text, cliente_id text, cliente_nombre text,
-      producto text, importe real, total real, fecha text, estado text default 'emitida',
+      producto text, importe real, total real, base_imponible real, iva_pct real, iva_cuota real, rectifica_id text, fecha text, estado text default 'emitida',
       cobrado real default 0, firma text, adjuntos text);
   create table if not exists fichajes (id text primary key, tecnico_id text, fecha text, hora_inicio text, hora_fin text);
   create table if not exists proveedores (id text primary key, nombre text, cif text, telefono text, email text, categoria text);
@@ -402,7 +402,8 @@ function buildFullState() {
   const documentos = db.prepare("select * from documentos").all().map(d => {
     const obj = { id: d.id, numero: d.numero, tipo: d.tipo, clienteId: d.cliente_id,
       clienteNombre: d.cliente_nombre, producto: d.producto, importe: d.importe,
-      total: d.total, fecha: d.fecha, estado: d.estado || "emitida", cobrado: d.cobrado || 0 };
+      total: d.total, baseImponible: d.base_imponible, ivaPct: d.iva_pct, ivaCuota: d.iva_cuota,
+      rectificaId: d.rectifica_id, fecha: d.fecha, estado: d.estado || "emitida", cobrado: d.cobrado || 0 };
     if (d.firma) obj.firma = d.firma;
     if (d.adjuntos) try { obj.adjuntos = JSON.parse(d.adjuntos); } catch {}
     return obj;
@@ -568,10 +569,16 @@ function saveFullState(S) {
 
     // --- Documentos ---
     db.exec("DELETE FROM documentos");
-    const insDoc = db.prepare("INSERT INTO documentos(id,numero,tipo,cliente_id,cliente_nombre,producto,importe,total,fecha,estado,cobrado,firma,adjuntos) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)");
-    (S.documentos || []).forEach(d => insDoc.run(d.id, d.numero || "", d.tipo, d.clienteId, d.clienteNombre || "",
-      d.producto || "", d.importe, d.total != null ? d.total : d.importe, d.fecha, d.estado || "emitida",
-      d.cobrado || 0, d.firma || null, d.adjuntos ? JSON.stringify(d.adjuntos) : null));
+    const insDoc = db.prepare("INSERT INTO documentos(id,numero,tipo,cliente_id,cliente_nombre,producto,importe,total,base_imponible,iva_pct,iva_cuota,rectifica_id,fecha,estado,cobrado,firma,adjuntos) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+    (S.documentos || []).forEach(d => {
+      const tot = d.total != null ? d.total : d.importe;
+      const base = d.baseImponible != null ? d.baseImponible : Math.round((tot / 1.21) * 100) / 100;
+      const cuota = d.ivaCuota != null ? d.ivaCuota : Math.round((tot - base) * 100) / 100;
+      insDoc.run(d.id, d.numero || "", d.tipo, d.clienteId, d.clienteNombre || "",
+        d.producto || "", d.importe, tot, base, d.ivaPct || 21, cuota, d.rectificaId || null,
+        d.fecha, d.estado || "emitida", d.cobrado || 0, d.firma || null,
+        d.adjuntos ? JSON.stringify(d.adjuntos) : null);
+    });
 
     // --- Fichajes ---
     db.exec("DELETE FROM fichajes");

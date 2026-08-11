@@ -20,6 +20,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<!-- jsPDF + autoTable para generación de PDF profesional -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
 <style>
   /* ===================== SISTEMA DE DISEÑO · CRM PROFESIONAL =====================
      Paleta corporativa (gris/blanco + azul + semáforo de estados), tipografía Inter
@@ -2656,33 +2659,42 @@ function adjuntarDocFactura(docId){
 }
 function genPresupuesto(cid){
   const c=cliente(cid); if(!c) return;
-  const mensual = c.notaTrabajo?c.importe:conIVA(c.importe); const tres=mensual*3;
+  const isNota = c.notaTrabajo;
+  const ivaPct = isNota ? 0 : 21;
+  const mensualBase = c.importe || 0;
+  const mensualTotal = isNota ? mensualBase : conIVA(mensualBase);
+  const tresBase = mensualBase * 3;
+  const tresCuota = Math.round(tresBase * (ivaPct / 100) * 100) / 100;
+  const tresTotal = Math.round((tresBase + tresCuota) * 100) / 100;
+  
   c.contrato=c.contrato||{}; c.contrato.estado="presupuesto"; save();
   const numero = siguienteNumero("presupuesto");
   docWindow("Presupuesto "+numero+" · "+c.negocio, `
     <h1>Presupuesto de aromatización <span style="font-size:16px;color:#59685f">nº ${esc(numero)}</span></h1>
     <p class="muted">Cliente: <b>${esc(c.negocio)}</b><br>${esc(c.direccion||"")}<br>Fecha: ${fmtDate(S.fecha)}</p>
-    <table><tr><th>Concepto</th><th>Importe${c.notaTrabajo?"":" (IVA incl.)"}</th></tr>
-      <tr><td>Servicio de aromatización · cuota mensual</td><td>${EUR(mensual)}/mes</td></tr>
-      <tr><td>Instalación de equipo en depósito</td><td>Incluida</td></tr>
-      <tr><td>Visita de mantenimiento cada ${(S.rutas.find(r=>r.id===c.rutaId)||{}).frecuenciaDias||28} días</td><td>Incluida</td></tr></table>
-    <p><b>Condiciones:</b> el primer pago se realiza de forma <b>trimestral</b> (3 mensualidades por adelantado). Finalizado este periodo inicial, el pago pasa a ser <b>mensual</b>, con una cuota de ${EUR(mensual)}.</p>
-    <table><tr class="tot"><td>Primer pago (trimestral, por adelantado)</td><td>${EUR(tres)}</td></tr></table>
+    <table><tr><th>Concepto</th><th>Base Imponible</th><th>IVA (${ivaPct}%)</th><th>Total (IVA incl.)</th></tr>
+      <tr>
+        <td>Servicio de aromatización · cuota mensual</td>
+        <td>${EUR(mensualBase)}/mes</td>
+        <td>${EUR(Math.round(mensualBase * (ivaPct/100)*100)/100)}</td>
+        <td><b>${EUR(mensualTotal)}</b>/mes</td>
+      </tr>
+      <tr><td>Instalación de equipo en depósito</td><td>Incluida</td><td>-</td><td>Incluida</td></tr>
+      <tr><td>Visita de mantenimiento cada ${(S.rutas.find(r=>r.id===c.rutaId)||{}).frecuenciaDias||28} días</td><td>Incluida</td><td>-</td><td>Incluida</td></tr></table>
+    <p><b>Condiciones:</b> el primer pago se realiza de forma <b>trimestral</b> (3 mensualidades por adelantado). Finalizado este periodo inicial, el pago pasa a ser <b>mensual</b>, con una cuota de ${EUR(mensualTotal)}.</p>
+    <table><tr class="tot"><td>Primer pago (trimestral por adelantado)</td><td>Base: ${EUR(tresBase)} + IVA: ${EUR(tresCuota)} = <b>${EUR(tresTotal)}</b></td></tr></table>
     <p><b>Observaciones</b></p>
     <ul style="margin:0 0 14px;padding-left:20px;line-height:1.7">
-      <li>El servicio de aromatización incluye:
-        <ul style="margin:4px 0;padding-left:18px">
-          <li>Reposición de aromas cada 28 días, garantizando la continuidad y frescura del ambiente.</li>
-          <li>Mantenimiento preventivo y correctivo del difusor, sin coste adicional.</li>
-          <li>Asistencia técnica ante incidencias en un plazo máximo de 48 horas laborables.</li>
-        </ul>
-      </li>
-      <li>En caso de requerir un cambio de fragancia, este podrá solicitarse en el momento de la reposición mensual, dentro de la gama disponible.</li>
-      <li>El equipo instalado es una cesión de uso, siendo propiedad de ${esc((S.empresa&&S.empresa.razonSocial)||"AMBIÉNTATE")}, y deberá mantenerse en correcto estado durante toda la duración del servicio.</li>
-      <li>El cliente podrá dar por finalizado el servicio con una notificación previa mínima de 30 días.</li>
+      <li>El servicio de aromatización incluye reposición de aromas cada 28 días y mantenimiento preventivo.</li>
+      <li>El equipo es cesión de uso propiedad de ${esc((S.empresa&&S.empresa.razonSocial)||"AMBIÉNTATE")}.</li>
     </ul>
     <p class="muted">Presupuesto válido 30 días. Al aceptarlo se emite la factura correspondiente. ${c.notaTrabajo?"Importes sin IVA (nota de trabajo).":""}</p>`);
-  (S.documentos=S.documentos||[]).push({id:uid(), numero, tipo:"presupuesto", clienteId:cid, clienteNombre:c.negocio, importe:mensual, total:tres, fecha:S.fecha});
+  (S.documentos=S.documentos||[]).push({
+    id:uid(), numero, tipo:"presupuesto", clienteId:cid, clienteNombre:c.negocio,
+    producto:"Servicio de aromatización (cuota trimestral adelantada)",
+    baseImponible: tresBase, ivaPct, ivaCuota: tresCuota,
+    importe: mensualTotal, total: tresTotal, fecha:S.fecha
+  });
   save(); closeSheet(); renderAll(); toast("📄 Presupuesto generado · pendiente de enviar al cliente");
 }
 function marcarAceptado(cid){
@@ -2691,17 +2703,28 @@ function marcarAceptado(cid){
 }
 function genFactura(cid){
   const c=cliente(cid); if(!c) return;
-  const mensual = c.notaTrabajo?c.importe:conIVA(c.importe); const tres=mensual*3;
+  const isNota = c.notaTrabajo;
+  const ivaPct = isNota ? 0 : 21;
+  const mensualBase = c.importe || 0;
+  const tresBase = mensualBase * 3;
+  const tresCuota = Math.round(tresBase * (ivaPct / 100) * 100) / 100;
+  const tresTotal = Math.round((tresBase + tresCuota) * 100) / 100;
   const numero = siguienteNumero("factura");
+
   docWindow("Factura "+numero+" · "+c.negocio, `
     <h1>Factura · primer cobro <span style="font-size:16px;color:#59685f">nº ${esc(numero)}</span></h1>
     <p class="muted">Cliente: <b>${esc(c.negocio)}</b><br>${esc(c.direccion||"")}<br>Fecha: ${fmtDate(S.fecha)}</p>
-    <table><tr><th>Concepto</th><th>Cantidad</th><th>Importe${c.notaTrabajo?"":" (IVA incl.)"}</th></tr>
-      <tr><td>Servicio de aromatización · cuota mensual</td><td>3 meses</td><td>${EUR(mensual)} × 3</td></tr></table>
-    <table><tr class="tot"><td>Total primer cobro (3 meses por adelantado)</td><td>${EUR(tres)}</td></tr></table>
-    <p class="muted">Presupuesto aceptado. A partir del 4º mes se facturará la cuota mensual de ${EUR(mensual)}. ${c.notaTrabajo?"Importes sin IVA (nota de trabajo).":""}</p>
+    <table><tr><th>Concepto</th><th>Cantidad</th><th>Base Imponible</th><th>IVA (${ivaPct}%)</th><th>Total</th></tr>
+      <tr><td>Servicio de aromatización · cuota mensual</td><td>3 meses</td><td>${EUR(tresBase)}</td><td>${EUR(tresCuota)}</td><td><b>${EUR(tresTotal)}</b></td></tr></table>
+    <table><tr class="tot"><td>Total primer cobro (3 meses por adelantado)</td><td>${EUR(tresTotal)}</td></tr></table>
+    <p class="muted">Presupuesto aceptado. A partir del 4º mes se facturará la cuota mensual de ${EUR(tresTotal/3)}. ${c.notaTrabajo?"Importes sin IVA (nota de trabajo).":""}</p>
     ${serviciosIncluidosHtml()}`);
-  (S.documentos=S.documentos||[]).push({id:uid(), numero, tipo:"factura", clienteId:cid, clienteNombre:c.negocio, importe:mensual, total:tres, fecha:S.fecha});
+  (S.documentos=S.documentos||[]).push({
+    id:uid(), numero, tipo:"factura", clienteId:cid, clienteNombre:c.negocio,
+    producto:"Servicio de aromatización (cuota trimestral adelantada)",
+    baseImponible: tresBase, ivaPct, ivaCuota: tresCuota,
+    importe: tresTotal, total: tresTotal, fecha:S.fecha, estado:"emitida"
+  });
   save(); closeSheet(); renderAll(); toast("🧾 Factura generada · pendiente de enviar al cliente");
 }
 // tras crear un cliente nuevo: ofrece generar presupuesto / factura
@@ -3180,17 +3203,236 @@ function admIncidencias(){
 /* ==================== PRESUPUESTOS Y FACTURAS (documentos) ==================== */
 let facturasFiltro={tipo:"",clienteId:"",rutaId:"",estado:"",desde:"",hasta:"",importeMin:"",importeMax:""};
 function setFacF(k,v){ facturasFiltro[k]=v; renderAdmin(); }
-const TIPO_DOC = {presupuesto:["📄","Presupuesto"],factura:["🧾","Factura"],albaran:["📝","Albarán / nota de entrega"],venta:["➕","Venta puntual"],cobro:["💰","Cobro registrado"]};
+const TIPO_DOC = {presupuesto:["📄","Presupuesto"],factura:["🧾","Factura"],rectificativa:["🔄","Factura Rectificativa"],albaran:["📝","Albarán / nota de entrega"],venta:["➕","Venta puntual"],cobro:["💰","Cobro registrado"]};
 // documentos que cuentan como facturación real (no presupuestos)
-function esFacturable(d){ return d.tipo==="factura"||d.tipo==="albaran"||d.tipo==="venta"||d.tipo==="cobro"; }
+function esFacturable(d){ return d.tipo==="factura"||d.tipo==="rectificativa"||d.tipo==="albaran"||d.tipo==="venta"||d.tipo==="cobro"; }
 // asigna el siguiente folio del tipo (prefijo + serie del año + contador) y avanza el contador guardado en Configuración
 function siguienteNumero(tipo){
   S.numeracion = S.numeracion || {};
-  const cfg = S.numeracion[tipo] || (S.numeracion[tipo] = {prefijo:(tipo.slice(0,3).toUpperCase()+"-"), siguiente:1});
+  const pref = tipo === "rectificativa" ? "REC-" : (tipo.slice(0,3).toUpperCase()+"-");
+  const cfg = S.numeracion[tipo] || (S.numeracion[tipo] = {prefijo:pref, siguiente:1});
   const serie = S.fecha.slice(0,4);
   const n = cfg.siguiente || 1;
   cfg.siguiente = n + 1;
   return `${cfg.prefijo||""}${serie}/${String(n).padStart(4,"0")}`;
+}
+
+/* ---- FASE 2: MOTOR DE PDF Y RECTIFICATIVAS ---- */
+function descargarPDFDocumento(docId) {
+  const d = (S.documentos || []).find(x => x.id === docId);
+  if (!d) return;
+  const c = cliente(d.clienteId);
+  const emp = S.empresa || DEFAULT_EMPRESA;
+  const total = d.total != null ? d.total : d.importe;
+  const isNota = c && c.notaTrabajo;
+  const ivaPct = d.ivaPct != null ? d.ivaPct : (isNota ? 0 : 21);
+  const baseImponible = d.baseImponible != null ? d.baseImponible : Math.round((total / (1 + ivaPct / 100)) * 100) / 100;
+  const ivaCuota = d.ivaCuota != null ? d.ivaCuota : Math.round((total - baseImponible) * 100) / 100;
+
+  if (window.jspdf && window.jspdf.jsPDF) {
+    try {
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+
+      // Franja superior
+      pdf.setFillColor(37, 99, 235);
+      pdf.rect(0, 0, pageWidth, 5, 'F');
+
+      // Datos Empresa
+      pdf.setTextColor(16, 24, 40);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(16);
+      pdf.text(emp.razonSocial || 'AMBIÉNTATE Aromatización S.L.', 14, 20);
+
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(8.5);
+      pdf.setTextColor(102, 112, 133);
+      pdf.text(`CIF: ${emp.cif || 'B-12345678'}`, 14, 26);
+      pdf.text(emp.direccion || 'Pol. Ind. La Red, Nave 7 · Alcalá de Guadaíra, Sevilla', 14, 31);
+      pdf.text(`Tel: ${emp.telefono || '954 123 456'} · Email: ${emp.email || 'info@ambientate.es'}`, 14, 36);
+
+      // Bloque Documento
+      const tipoNombre = (TIPO_DOC[d.tipo] ? TIPO_DOC[d.tipo][1] : d.tipo).toUpperCase();
+      pdf.setFillColor(240, 243, 248);
+      pdf.roundedRect(pageWidth - 75, 14, 61, 26, 3, 3, 'F');
+
+      pdf.setTextColor(37, 99, 235);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(10.5);
+      pdf.text(tipoNombre, pageWidth - 44, 21, { align: 'center' });
+
+      pdf.setTextColor(16, 24, 40);
+      pdf.setFontSize(10);
+      pdf.text(`N°: ${d.numero || '---'}`, pageWidth - 44, 28, { align: 'center' });
+      pdf.setFontSize(8);
+      pdf.setTextColor(102, 112, 133);
+      pdf.text(`Fecha: ${fmtDate(d.fecha)}`, pageWidth - 44, 34, { align: 'center' });
+
+      pdf.setDrawColor(228, 231, 236);
+      pdf.setLineWidth(0.5);
+      pdf.line(14, 44, pageWidth - 14, 44);
+
+      // Bloques Cliente y Pago
+      pdf.setFillColor(248, 250, 252);
+      pdf.roundedRect(14, 48, 88, 30, 2, 2, 'F');
+      pdf.setTextColor(37, 99, 235);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(9);
+      pdf.text('DATOS DEL CLIENTE', 18, 54);
+
+      pdf.setTextColor(16, 24, 40);
+      pdf.setFontSize(9.5);
+      pdf.text(c ? c.negocio : (d.clienteNombre || '---'), 18, 60);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(8.5);
+      pdf.setTextColor(102, 112, 133);
+      pdf.text(`Dirección: ${c ? (c.direccion || '---') : '---'}`, 18, 66);
+      if (c && c.banco && c.banco.iban) pdf.text(`IBAN: ${c.banco.iban}`, 18, 72);
+
+      pdf.setFillColor(248, 250, 252);
+      pdf.roundedRect(108, 48, 88, 30, 2, 2, 'F');
+      pdf.setTextColor(37, 99, 235);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(9);
+      pdf.text('INFORMACIÓN DE FACTURACIÓN', 112, 54);
+
+      pdf.setTextColor(16, 24, 40);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(8.5);
+      const formaLabel = c ? (c.formaHabitual === 'domiciliacion' ? '🏦 Domiciliación Bancaria' : '💵 Efectivo') : 'Efectivo';
+      pdf.text(`Forma de pago: ${formaLabel}`, 112, 60);
+      pdf.text(`Estado del cobro: ${(ESTADO_FACTURA_UI[estadoFactura(d)] || {label:'Emitida'}).label}`, 112, 66);
+
+      // Tabla de conceptos
+      const startY = 85;
+      const headers = [['CONCEPTO / DESCRIPCIÓN', 'CANT.', 'BASE UNIT.', 'IVA %', 'TOTAL (€)']];
+      const rows = [
+        [
+          d.producto || 'Servicio de aromatización y mantenimiento preventivo',
+          '1',
+          `${baseImponible.toFixed(2)} €`,
+          `${ivaPct}%`,
+          `${total.toFixed(2)} €`
+        ]
+      ];
+
+      if (typeof pdf.autoTable === 'function') {
+        pdf.autoTable({
+          startY,
+          head: headers,
+          body: rows,
+          theme: 'grid',
+          headStyles: { fillColor: [240, 243, 248], textColor: [16, 24, 40], fontStyle: 'bold', fontSize: 8.5 },
+          bodyStyles: { textColor: [16, 24, 40], fontSize: 8.5 },
+          columnStyles: {
+            0: { cellWidth: 90 },
+            1: { cellWidth: 18, halign: 'center' },
+            2: { cellWidth: 26, halign: 'right' },
+            3: { cellWidth: 18, halign: 'center' },
+            4: { cellWidth: 30, halign: 'right' }
+          },
+          margin: { left: 14, right: 14 }
+        });
+      }
+
+      const finalY = (pdf.lastAutoTable ? pdf.lastAutoTable.finalY : startY + 25) + 8;
+      const totX = pageWidth - 80;
+      pdf.setDrawColor(228, 231, 236);
+      pdf.setFillColor(248, 250, 252);
+      pdf.roundedRect(totX, finalY, 66, 32, 2, 2, 'FD');
+
+      pdf.setFontSize(9);
+      pdf.setTextColor(102, 112, 133);
+      pdf.text('Base Imponible:', totX + 4, finalY + 8);
+      pdf.text(`${baseImponible.toFixed(2)} €`, totX + 62, finalY + 8, { align: 'right' });
+
+      pdf.text(`Cuota IVA (${ivaPct}%):`, totX + 4, finalY + 16);
+      pdf.text(`${ivaCuota.toFixed(2)} €`, totX + 62, finalY + 16, { align: 'right' });
+
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(10.5);
+      pdf.setTextColor(37, 99, 235);
+      pdf.text('TOTAL FACTURA:', totX + 4, finalY + 26);
+      pdf.text(`${total.toFixed(2)} €`, totX + 62, finalY + 26, { align: 'right' });
+
+      if (d.firma) {
+        try {
+          pdf.setFontSize(8.5);
+          pdf.setTextColor(16, 24, 40);
+          pdf.text('Firma de conformidad del cliente:', 14, finalY + 8);
+          pdf.addImage(d.firma, 'PNG', 14, finalY + 11, 48, 18);
+        } catch(e){}
+      }
+
+      const footerY = 280;
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(7.5);
+      pdf.setTextColor(152, 162, 179);
+      pdf.text('De conformidad con el RGPD y la LOPDGDD 3/2018, sus datos personales son tratados por AMBIÉNTATE Aromatización S.L.', pageWidth / 2, footerY, { align: 'center' });
+      pdf.text(`Documento generado electrónicamente · N° ${d.numero || ''} · AMBIÉNTATE`, pageWidth / 2, footerY + 4, { align: 'center' });
+
+      pdf.save(`${d.numero || 'documento'}-${(d.clienteNombre || 'cliente').replace(/[^a-zA-Z0-9]/g, '_')}.pdf`);
+      toast('📄 PDF generado y descargado');
+      return;
+    } catch(err) {
+      console.warn('Error jsPDF:', err);
+    }
+  }
+  imprimirDocumentoHTML(docId);
+}
+
+function compartirWhatsApp(docId) {
+  const d = (S.documentos || []).find(x => x.id === docId);
+  if (!d) return;
+  const c = cliente(d.clienteId);
+  const tel = ((c && c.telefono) || "").replace(/\D/g, "");
+  if (!tel) { toast("El cliente no tiene teléfono guardado"); return; }
+  const tipoNombre = (TIPO_DOC[d.tipo] ? TIPO_DOC[d.tipo][1] : d.tipo);
+  const totalStr = EUR(d.total != null ? d.total : d.importe);
+  const msg = `Hola *${c ? c.negocio : d.clienteNombre}*, le enviamos el justificante de *${tipoNombre} N° ${d.numero || ""}* por importe de *${totalStr}* emitida con fecha ${fmtDate(d.fecha)}. ¡Muchas gracias!`;
+  window.open(`https://wa.me/34${tel}?text=${encodeURIComponent(msg)}`, '_blank');
+}
+
+function crearRectificativa(docId) {
+  const orig = (S.documentos || []).find(d => d.id === docId);
+  if (!orig) return;
+  const c = cliente(orig.clienteId);
+  const origTotal = orig.total != null ? orig.total : orig.importe;
+  const isNota = c && c.notaTrabajo;
+  const ivaPct = orig.ivaPct != null ? orig.ivaPct : (isNota ? 0 : 21);
+  const origBase = orig.baseImponible != null ? orig.baseImponible : Math.round((origTotal / (1 + ivaPct / 100)) * 100) / 100;
+
+  formSheet("Factura Rectificativa / Abono", [
+    { k: "motivo", label: "Motivo de la rectificación", type: "text", val: "Abono de factura " + (orig.numero || "") },
+    { k: "importeBase", label: "Base imponible a rectificar (€, en positivo)", type: "number", val: Math.abs(origBase) }
+  ], vals => {
+    if (!vals.importeBase || vals.importeBase <= 0) { toast("Indica importe de base imponible válido"); return; }
+    const base = -Math.abs(parseFloat(vals.importeBase));
+    const cuota = Math.round(base * (ivaPct / 100) * 100) / 100;
+    const total = Math.round((base + cuota) * 100) / 100;
+    const numero = siguienteNumero("rectificativa");
+
+    const doc = {
+      id: uid(),
+      numero,
+      tipo: "rectificativa",
+      clienteId: orig.clienteId,
+      clienteNombre: orig.clienteNombre,
+      producto: vals.motivo,
+      baseImponible: base,
+      ivaPct,
+      ivaCuota: cuota,
+      importe: total,
+      total,
+      fecha: S.fecha,
+      estado: "pagada",
+      rectificaId: orig.id,
+      rectificaNumero: orig.numero
+    };
+    (S.documentos = S.documentos || []).push(doc);
+    save(); renderAdmin(); toast("🔄 Factura rectificativa " + numero + " emitida");
+  });
 }
 function admFacturas(){
   const f=facturasFiltro; const opt=(v,t,sel)=>`<option value="${v}" ${v===sel?"selected":""}>${t}</option>`;
@@ -3220,9 +3462,14 @@ function admFacturas(){
     </div>`;
   const rows = docs.map(d=>{ const [dic,lab]=TIPO_DOC[d.tipo]||["📄",d.tipo];
     const st=estadoFactura(d); const stUI=st?ESTADO_FACTURA_UI[st]:null; const total=d.total!=null?d.total:d.importe;
+    const base = d.baseImponible != null ? d.baseImponible : Math.round((total / 1.21) * 100) / 100;
+    const cuota = d.ivaCuota != null ? d.ivaCuota : Math.round((total - base) * 100) / 100;
     return `<div class="row" style="flex-wrap:wrap"><div class="ri">${dic}</div>
       <div class="rm"><div class="rn">${d.numero?`<span style="font-variant-numeric:tabular-nums;color:var(--muted)">${esc(d.numero)}</span> · `:""}${lab} · ${esc(d.clienteNombre||"")}${stUI?` <span class="mtag ${stUI.cls}">${stUI.label}</span>`:""}</div>
-        <div class="rd">${d.producto?esc(d.producto)+" · ":""}${EUR(total)}${st==='parcial'?` (cobrado ${EUR(d.cobrado||0)})`:""} · ${fmtDate(d.fecha)}${d.firma?" · ✍️ firmado":""}${d.adjuntos&&d.adjuntos.length?` · ${ic('paperclip',12)} ${d.adjuntos.length}`:""}</div></div>
+        <div class="rd">${d.producto?esc(d.producto)+" · ":""}<b>${EUR(total)}</b> <span style="font-size:12px;color:var(--muted)">(Base ${EUR(base)} + IVA ${EUR(cuota)})</span>${st==='parcial'?` (cobrado ${EUR(d.cobrado||0)})`:""} · ${fmtDate(d.fecha)}${d.firma?" · ✍️ firmado":""}${d.adjuntos&&d.adjuntos.length?` · ${ic('paperclip',12)} ${d.adjuntos.length}`:""}</div></div>
+      <button class="mtag mt-acc" onclick="event.stopPropagation();descargarPDFDocumento('${d.id}')">📥 Descargar PDF</button>
+      <button class="mtag mt-good" onclick="event.stopPropagation();compartirWhatsApp('${d.id}')">📱 WhatsApp</button>
+      ${(d.tipo==='factura'||d.tipo==='rectificativa')?`<button class="mtag mt-warn" onclick="event.stopPropagation();crearRectificativa('${d.id}')">🔄 Rectificar</button>`:""}
       ${st==='pendiente'||st==='emitida'||st==='vencida'?`<button class="mtag mt-vio" onclick="event.stopPropagation();registrarCobroParcial('${d.id}')">Cobro parcial</button>`:""}
       ${(st==='pendiente'||st==='emitida'||st==='vencida'||st==='parcial')?`<button class="mtag mt-good" onclick="event.stopPropagation();marcarPagada('${d.id}')">Marcar pagada</button>`:""}
       ${d.firma?`<button class="mtag mt-neutral" onclick="event.stopPropagation();verFirmaFactura('${d.id}')">✍️ Ver firma</button>`:""}
