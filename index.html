@@ -3457,7 +3457,8 @@ function admFacturas(){
   ).join("");
   const quickbar = `<div class="quickbar">
       <button onclick="nuevoDocumentoManual('factura')"><span class="qi">${ic('receipt',15)}</span>Nueva factura</button>
-      <button onclick="nuevoDocumentoManual('albaran')"><span class="qi">${ic('file',15)}</span>Nueva nota de entrega</button>
+      <button onclick="nuevoDocumentoManual('presupuesto')"><span class="qi">${ic('file',15)}</span>Nuevo presupuesto</button>
+      <button onclick="nuevoDocumentoManual('albaran')"><span class="qi">${ic('file',15)}</span>Nuevo albarán</button>
       <button onclick="registrarCobroQuick()"><span class="qi">${ic('wallet',15)}</span>Registrar cobro</button>
     </div>`;
   const rows = docs.map(d=>{ const [dic,lab]=TIPO_DOC[d.tipo]||["📄",d.tipo];
@@ -3495,21 +3496,54 @@ function admFacturas(){
     <div class="sec-t">Documentos <span class="cnt">${docs.length}</span></div>
     ${rows||`<div class="empty"><span class="ei">📄</span>Sin documentos para el filtro.</div>`}`;
 }
-function nuevoDocumentoManual(tipo){
-  formSheet(tipo==="factura"?"Nueva factura":"Nueva nota de entrega / albarán",[
-    {k:"clienteId",label:"Cliente",type:"select",val:S.clientes[0]?.id||"",options:S.clientes.map(c=>({v:c.id,t:c.negocio}))},
-    {k:"importe",label:"Importe (€, sin IVA)",type:"number",val:0},
-  ],vals=>{
-    const c=cliente(vals.clienteId); if(!c||!(vals.importe>0)){ toast("Indica cliente e importe"); return; }
-    const importeIVA = c.notaTrabajo?vals.importe:conIVA(vals.importe);
+function nuevoDocumentoManual(tipo, preselectedCid){
+  if(!S.clientes || !S.clientes.length){ toast("Crea primero un cliente en la pestaña Clientes"); return; }
+  const titulos = {
+    factura: "Nueva Factura",
+    presupuesto: "Nuevo Presupuesto",
+    albaran: "Nuevo Albarán / Nota de entrega"
+  };
+  const selCid = preselectedCid || (S.clientes[0] ? S.clientes[0].id : "");
+  const cSel = cliente(selCid) || S.clientes[0];
+
+  formSheet(titulos[tipo] || "Nuevo documento", [
+    { k: "clienteId", label: "Cliente", type: "select", val: cSel.id, options: S.clientes.map(c => ({ v: c.id, t: c.negocio + (c.direccion ? " (" + c.direccion + ")" : "") })) },
+    { k: "concepto", label: "Concepto / Descripción libre del servicio o venta", type: "text", val: tipo === "presupuesto" ? "Servicio de aromatización y mantenimiento" : "Servicio de aromatización cuota mensual" },
+    { k: "baseImponible", label: "Base imponible (€, sin IVA)", type: "number", val: cSel.importe || 30 },
+    { k: "ivaPct", label: "Tipo de IVA", type: "select", val: cSel.notaTrabajo ? "0" : "21", options: [{ v: "21", t: "21% IVA General" }, { v: "0", t: "0% Sin IVA (Nota de trabajo / Exento)" }] }
+  ], vals => {
+    const c = cliente(vals.clienteId);
+    if (!c) { toast("Selecciona un cliente válido"); return; }
+    const base = parseFloat(vals.baseImponible);
+    if (isNaN(base) || base <= 0) { toast("Indica un importe de Base Imponible válido"); return; }
+
+    const conceptoText = (vals.concepto || "").trim() || "Servicio de aromatización";
+    const ivaPct = parseInt(vals.ivaPct || "21", 10);
+    const ivaCuota = Math.round(base * (ivaPct / 100) * 100) / 100;
+    const total = Math.round((base + ivaCuota) * 100) / 100;
     const numero = siguienteNumero(tipo);
-    const asunto=(tipo==="factura"?"Factura":"Albarán")+" "+numero+" - "+c.negocio;
-    docWindow(asunto, `<h1>${tipo==="factura"?"Factura":"Albarán / nota de entrega"} <span style="font-size:16px;color:#59685f">nº ${esc(numero)}</span></h1>
-      <p class="muted">Cliente: <b>${esc(c.negocio)}</b><br>${esc(c.direccion||"")}<br>Fecha: ${fmtDate(S.fecha)}</p>
-      <table><tr><th>Concepto</th><th>Importe</th></tr><tr><td>Servicio de aromatización</td><td>${EUR(importeIVA)}${c.notaTrabajo?" (sin IVA)":" (IVA incl.)"}</td></tr></table>
-      ${serviciosIncluidosHtml()}`
-      +docShareActions(c,asunto));
-    (S.documentos=S.documentos||[]).push({id:uid(),numero,tipo,clienteId:c.id,clienteNombre:c.negocio,producto:"Servicio de aromatización",importe:importeIVA,total:importeIVA,fecha:S.fecha,estado:"emitida"});
+
+    const doc = {
+      id: uid(),
+      numero,
+      tipo,
+      clienteId: c.id,
+      clienteNombre: c.negocio,
+      producto: conceptoText,
+      baseImponible: base,
+      ivaPct,
+      ivaCuota,
+      importe: total,
+      total,
+      fecha: S.fecha,
+      estado: tipo === "presupuesto" ? "pendiente" : "emitida",
+      cobrado: 0
+    };
+
+    (S.documentos = S.documentos || []).push(doc);
+    save();
+    renderAdmin();
+    toast(`✓ ${(TIPO_DOC[tipo] ? TIPO_DOC[tipo][1] : tipo)} ${numero} emitida (${EUR(total)})`);
   });
 }
 function registrarCobroQuick(){
