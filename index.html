@@ -595,6 +595,40 @@ window.onerror = function(msg, src, line, col, err) {
   d.textContent = '❌ ERROR JS:\n' + msg + '\nLínea: ' + line + ', Col: ' + col + '\n' + (err && err.stack ? err.stack : '');
   document.body.prepend(d);
 };
+
+/* ---- CAPA API: comunicación con el backend SQLite ---- */
+const API_BASE = location.protocol === 'file:' ? 'http://localhost:4000' : location.origin;
+let _syncTimer = null;
+let _serverAvailable = false; // se pone a true si el primer fetch funciona
+
+async function apiFetch(method, path, body) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
+  try {
+    const res = await fetch(API_BASE + path, opts);
+    if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
+    return await res.json();
+  } catch (err) {
+    console.warn('API offline:', err.message);
+    return null;
+  }
+}
+
+async function syncToServer() {
+  if (!_serverAvailable) return;
+  const result = await apiFetch('POST', '/api/state', S);
+  if (result) console.log('✓ Sincronizado con servidor');
+}
+
+async function loadFromServer() {
+  const state = await apiFetch('GET', '/api/state');
+  if (state && state.tecnicos) {
+    _serverAvailable = true;
+    return state;
+  }
+  return null;
+}
+
 /* ==================== AMBIÉNTATE · App de rutas · MVP ==================== */
 const LS_KEY = "ambientate_v1";
 const EUR = n => (Math.round(n*100)/100).toLocaleString("es-ES",{minimumFractionDigits:0,maximumFractionDigits:2}) + " €";
@@ -795,12 +829,18 @@ function openMaps(cid, ev){
 
 /* ---------- estado ---------- */
 // var (no let) para evitar TDZ: seed() lee S vía DISPOSITIVOS_() durante su propia construcción
-try { localStorage.removeItem(LS_KEY); } catch(_e){} // limpieza única de sesión corrupta
 var S = load();
 var currentTab = "Inicio";
 
 function load(){
   try{ const raw = localStorage.getItem(LS_KEY); if(raw){ const s=JSON.parse(raw);
+    patchState(s);
+    try{ localStorage.setItem(LS_KEY, JSON.stringify(s)); }catch(err){}
+    return s; } }catch(e){}
+  return seed();
+}
+// Aplica defaults/migraciones al estado cargado (desde localStorage o del servidor)
+function patchState(s){
     if(!s.aromas||!s.aromas.length) s.aromas=DEFAULT_AROMAS.slice();
     if(!s.sectores||!s.sectores.length) s.sectores=DEFAULT_SECTORES.slice();
     if(!s.tareas) s.tareas=[];
@@ -809,14 +849,14 @@ function load(){
     if(!s.aromaCategoria) s.aromaCategoria={};
     if(!s.aromaProveedor) s.aromaProveedor={};
     if(!s.eventos) s.eventos=[];
-    if(!s.aromaCompra){ // migración: el antiguo €/L pasa a ser el compra de "Litro nebulización"
+    if(!s.aromaCompra){
       s.aromaCompra={}; Object.keys(s.aromaCoste).forEach(a=>{ s.aromaCompra[a]={"Litro nebulización":s.aromaCoste[a]}; });
     }
     if(!s.formatoVenta) s.formatoVenta={"Litro nebulización":150,"Bote hidroalcohólico":13,"Bacteriostático":0};
     if(!s.fichajes) s.fichajes=[];
     if(!s.documentos) s.documentos=[];
     if(!s.solicitudes) s.solicitudes=[];
-    if(s.autoClose===undefined) s.autoClose=false; // cierre automático ahora apagado por defecto
+    if(s.autoClose===undefined) s.autoClose=false;
     if(!s.empresa) s.empresa=DEFAULT_EMPRESA;
     if(!s.proveedores) s.proveedores=[];
     if(!s.vehiculos) s.vehiculos=[];
@@ -830,16 +870,17 @@ function load(){
       if(t.id==="t2" || t.nombre==="Ana López") t.nombre="Técnico 2";
       if(t.id==="t3" || t.nombre==="Marta Ruiz") t.nombre="Técnico 3";
     });
-    try{ localStorage.setItem(LS_KEY, JSON.stringify(s)); }catch(err){}
-    return s; } }catch(e){}
-  return seed();
 }
 // Almacenamiento: localStorage tiene ~5 MB. Las fotos de gasto (base64) pueden agotarlo.
 // MEJORA FUTURA: mover las fotos a IndexedDB (sin límite práctico) y guardar solo la referencia aquí.
 // De momento capturamos el error de cuota para que la app no se rompa al guardar.
 function save(){
+  // 1. Cache local inmediata (para que la app responda instantáneamente)
   try{ localStorage.setItem(LS_KEY, JSON.stringify(S)); }
   catch(e){ if(e && (e.name==="QuotaExceededError"||e.code===22)) toast("⚠ Almacenamiento lleno: exporta una copia o borra fotos"); else throw e; }
+  // 2. Sync al backend (debounced 2s para no saturar)
+  clearTimeout(_syncTimer);
+  _syncTimer = setTimeout(() => syncToServer(), 2000);
 }
 
 function seed(){
@@ -4946,25 +4987,48 @@ window.addEventListener("pagehide", save);
 window.addEventListener("beforeunload", save);
 
 /* ---- init ---- */
-try {
-  if(!S.fecha) S.fecha=todayISO();
-  if(!S.rutaSel) S.rutaSel = S.rutas[0]?.id;
-  autoCloseCheck();
-  if(!S.session || !S.session.role){
+// Primero intenta cargar del servidor; si falla usa localStorage (ya cargado en S)
+(async function initApp() {
+  try {
+    // Intentar cargar estado del servidor
+    const serverState = await loadFromServer();
+    if (serverState) {
+      // Preservar la sesión local (no viene del servidor)
+      const localSession = S.session;
+      const localFecha = S.fecha;
+      const localRutaSel = S.rutaSel;
+      S = serverState;
+      patchState(S);
+      // Restaurar sesión y fecha local
+      if (localSession && localSession.role) S.session = localSession;
+      if (localFecha) S.fecha = localFecha;
+      if (localRutaSel) S.rutaSel = localRutaSel;
+      // Guardar en localStorage como cache
+      try { localStorage.setItem(LS_KEY, JSON.stringify(S)); } catch(e) {}
+      console.log('✓ Datos cargados del servidor');
+    } else {
+      console.log('⚠ Servidor no disponible, usando datos locales');
+    }
+
+    if(!S.fecha) S.fecha = todayISO();
+    if(!S.rutaSel) S.rutaSel = S.rutas[0]?.id;
+    autoCloseCheck();
+    if(!S.session || !S.session.role){
+      S.session = { role: "admin", tecnicoId: null };
+      save();
+    }
+    renderAll();
+    switchTab(S.session.role === "admin" ? "Admin" : "Inicio");
+  } catch(initErr) {
+    console.error("Error en la inicialización:", initErr);
+    try { localStorage.removeItem(LS_KEY); } catch(e){}
+    S = seed();
     S.session = { role: "admin", tecnicoId: null };
     save();
+    renderAll();
+    switchTab("Admin");
   }
-  renderAll();
-  switchTab(S.session.role === "admin" ? "Admin" : "Inicio");
-} catch(initErr) {
-  console.error("Error en la inicialización:", initErr);
-  try { localStorage.removeItem(LS_KEY); } catch(e){}
-  S = seed();
-  S.session = { role: "admin", tecnicoId: null };
-  save();
-  renderAll();
-  switchTab("Admin");
-}
+})();
 </script>
 </body>
 </html>
