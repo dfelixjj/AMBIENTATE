@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: ambientate-app
+    env: node
+    buildCommand: ""
+    startCommand: "npm start"
+    autoDeploy: true

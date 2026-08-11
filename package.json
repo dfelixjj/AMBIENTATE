@@ -1,0 +1,13 @@
+{
+  "name": "ambientate-rutas",
+  "version": "1.0.0",
+  "description": "AMBIÉNTATE - App de Rutas y CRM",
+  "type": "module",
+  "main": "backend/server.mjs",
+  "scripts": {
+    "start": "node --experimental-sqlite backend/server.mjs"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

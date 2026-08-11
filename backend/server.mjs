@@ -695,5 +695,5 @@ const server = createServer((req, res) => {
   }
 });
 
-const PORT = 4000;
-server.listen(PORT, () => console.log(`🌿 AMBIÉNTATE backend en http://localhost:${PORT}  (SQLite: backend/ambientate.db)`));
+const PORT = process.env.PORT || 4000;
+server.listen(PORT, "0.0.0.0", () => console.log(`🌿 AMBIÉNTATE backend en puerto ${PORT} (SQLite: backend/ambientate.db)`));
