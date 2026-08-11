@@ -565,6 +565,7 @@
     <section id="viewHistorico" class="view hidden" role="region" aria-label="Histórico"></section>
     <section id="viewAdmin" class="view hidden" role="region" aria-label="Administración"></section>
     <section id="viewGastos" class="view hidden" role="region" aria-label="Gastos"></section>
+    <section id="viewEditorFactura" class="view hidden" role="region" aria-label="Editor de Facturas"></section>
   </main>
 
   <nav class="tabbar">
@@ -3446,197 +3447,378 @@ function crearRectificativa(docId) {
   });
 }
 
-/* ---- CREADOR MULTI-LÍNEA DE DOCUMENTOS ---- */
-let docLinesDraft = [];
+/* ---- SUITE COMPLETA DE FACTURACIÓN ESTILO STEL ORDER (VISTA ANCHA DE EDITOR) ---- */
+let editorFacturaDraft = null;
 
-function nuevoDocumentoManual(tipoDoc, preselectedCid) {
+function nuevoDocumentoManual(tipo, preselectedCid) {
   if (!S.clientes || !S.clientes.length) { toast("Crea primero un cliente en la pestaña Clientes"); return; }
-  const cSel = cliente(preselectedCid) || S.clientes[0];
-  
-  docLinesDraft = [
-    {
-      concepto: tipoDoc === "presupuesto" ? "Servicio de aromatización y mantenimiento" : "Servicio de aromatización cuota mensual",
-      cantidad: 1,
-      precioUnit: cSel.importe || 30
-    }
-  ];
-  
-  drawCreadorFacturaSheet(tipoDoc || "factura", cSel.id);
-  openSheet();
+  const cSel = cliente(preselectedCid) || S.clientes[0] || { id: "", negocio: "", importe: 30 };
+  const tipoDoc = tipo || "factura";
+
+  editorFacturaDraft = {
+    id: null,
+    numero: siguienteNumero(tipoDoc),
+    tipo: tipoDoc,
+    clienteId: cSel.id,
+    clienteNombre: cSel.negocio,
+    fecha: S.fecha || todayISO(),
+    estado: tipoDoc === "presupuesto" ? "pendiente" : "emitida",
+    titulo: tipoDoc === "presupuesto" ? "Presupuesto de aromatización" : "Servicio de aromatización y productos",
+    formaPago: cSel.formaHabitual || "efectivo",
+    tecnicoId: S.session?.tecnicoId || S.tecnicos[0]?.id || "t1",
+    ivaPct: cSel.notaTrabajo ? 0 : 21,
+    lineas: [
+      {
+        ref: "SERV-01",
+        nombre: "Servicio de aromatización cuota mensual",
+        descripcion: "Cuota mensual de aromatización y mantenimiento preventivo",
+        precioBase: cSel.importe || 30,
+        uds: 1,
+        dto: 0
+      }
+    ]
+  };
+
+  openEditorFactura();
 }
 
-function drawCreadorFacturaSheet(tipoDoc, clienteId) {
-  const c = cliente(clienteId) || S.clientes[0];
-  const titulos = { factura: "Nueva Factura", presupuesto: "Nuevo Presupuesto", albaran: "Nuevo Albarán / Nota de entrega" };
-  const isNota = c.notaTrabajo;
+function abrirEditorExistente(docId) {
+  const doc = (S.documentos || []).find(d => d.id === docId);
+  if (!doc) return;
+  const c = cliente(doc.clienteId);
+  const total = doc.total != null ? doc.total : doc.importe;
+  const ivaPct = doc.ivaPct != null ? doc.ivaPct : (c && c.notaTrabajo ? 0 : 21);
+  const base = doc.baseImponible != null ? doc.baseImponible : Math.round((total / (1 + ivaPct / 100)) * 100) / 100;
 
-  let baseTotal = 0;
-  docLinesDraft.forEach(l => {
-    baseTotal += (l.cantidad || 1) * (l.precioUnit || 0);
+  editorFacturaDraft = {
+    id: doc.id,
+    numero: doc.numero || "",
+    tipo: doc.tipo,
+    clienteId: doc.clienteId,
+    clienteNombre: doc.clienteNombre,
+    fecha: doc.fecha,
+    estado: doc.estado || "emitida",
+    titulo: doc.producto || "",
+    formaPago: c ? c.formaHabitual : "efectivo",
+    tecnicoId: S.tecnicos[0]?.id || "t1",
+    ivaPct,
+    lineas: Array.isArray(doc.lineas) && doc.lineas.length ? doc.lineas.map(l => ({
+      ref: l.ref || "PROD",
+      nombre: l.concepto || l.nombre,
+      descripcion: l.descripcion || "",
+      precioBase: l.precioUnit != null ? l.precioUnit : (l.precioBase || 0),
+      uds: l.cantidad != null ? l.cantidad : (l.uds || 1),
+      dto: l.dto || 0
+    })) : [
+      {
+        ref: "PROD-01",
+        nombre: doc.producto || "Servicio de aromatización",
+        descripcion: "",
+        precioBase: base,
+        uds: 1,
+        dto: 0
+      }
+    ]
+  };
+
+  openEditorFactura();
+}
+
+function openEditorFactura() {
+  drawEditorFactura();
+  switchTab("EditorFactura");
+}
+
+function drawEditorFactura() {
+  const d = editorFacturaDraft;
+  if (!d) return;
+  const el = document.getElementById("viewEditorFactura");
+  const c = cliente(d.clienteId);
+  const titulos = { factura: "Factura ordinaria", presupuesto: "Presupuesto", albaran: "Albarán / Nota de entrega", rectificativa: "Factura rectificativa" };
+
+  let totalBase = 0;
+  d.lineas.forEach(l => {
+    const pBase = l.precioBase || 0;
+    const uds = l.uds || 1;
+    const dto = l.dto || 0;
+    totalBase += pBase * uds * (1 - dto / 100);
   });
-  baseTotal = Math.round(baseTotal * 100) / 100;
+  totalBase = Math.round(totalBase * 100) / 100;
+  const cuotaIva = Math.round(totalBase * (d.ivaPct / 100) * 100) / 100;
+  const totalDoc = Math.round((totalBase + cuotaIva) * 100) / 100;
 
-  const selectedIvaPct = parseInt(document.getElementById("df_ivaPct")?.value || (isNota ? "0" : "21"), 10);
-  const cuotaIva = Math.round(baseTotal * (selectedIvaPct / 100) * 100) / 100;
-  const totalDoc = Math.round((baseTotal + cuotaIva) * 100) / 100;
-
-  const sh = document.getElementById("sheet");
-  sh.innerHTML = `
-    <div class="grab"></div>
-    <h2>${titulos[tipoDoc] || "Nuevo documento"}</h2>
-    <p class="sub">Añade productos o servicios personalizados a este documento</p>
-
-    <label class="mini-lbl">Cliente</label>
-    <select class="fld-inp" id="df_clienteId" onchange="drawCreadorFacturaSheet('${tipoDoc}', this.value)">
-      ${S.clientes.map(cl => `<option value="${cl.id}" ${cl.id === c.id ? "selected" : ""}>${esc(cl.negocio)} (${esc(cl.direccion || "Sin dir.")})</option>`).join("")}
-    </select>
-
-    <label class="mini-lbl">Tipo de documento</label>
-    <select class="fld-inp" id="df_tipoDoc" onchange="drawCreadorFacturaSheet(this.value, '${c.id}')">
-      <option value="factura" ${tipoDoc === "factura" ? "selected" : ""}>🧾 Factura</option>
-      <option value="presupuesto" ${tipoDoc === "presupuesto" ? "selected" : ""}>📄 Presupuesto</option>
-      <option value="albaran" ${tipoDoc === "albaran" ? "selected" : ""}>📝 Albarán / Nota de entrega</option>
-    </select>
-
-    <div class="sec-t" style="margin-top:14px">Líneas de producto / servicio (${docLinesDraft.length})</div>
-
-    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
-      ${docLinesDraft.map((l, idx) => `
-        <div class="row" style="padding:10px 12px;background:var(--surface-2);border-radius:8px">
-          <div class="rm">
-            <div class="rn">${esc(l.concepto)}</div>
-            <div class="rd">${l.cantidad} ud(s) × ${EUR(l.precioUnit)} = <b>${EUR(Math.round(l.cantidad * l.precioUnit * 100) / 100)}</b></div>
-          </div>
-          <button class="mtag mt-crit" onclick="quitarLineaFactura(${idx}, '${tipoDoc}', '${c.id}')">🗑️</button>
-        </div>
-      `).join("")}
+  el.innerHTML = `
+    <!-- Barra Superior Estilo STEL Order -->
+    <div style="background:#fff;padding:16px 22px;border-bottom:1px solid var(--line);margin:-16px -16px 20px -16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;box-shadow:0 1px 3px rgba(0,0,0,0.05);border-radius:12px 12px 0 0">
+      <div style="display:flex;align-items:center;gap:12px">
+        <button class="mtag mt-neutral" onclick="switchTab('Admin')" style="font-size:14px;padding:7px 14px;cursor:pointer">← Volver a Facturas</button>
+        <h2 style="margin:0;font-size:22px;font-weight:800;color:var(--ink)">${titulos[d.tipo] || "Factura"}</h2>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="cta" style="margin:0;padding:10px 20px" onclick="guardarEditorFactura(true)">💾 Guardar y Emitir</button>
+        ${d.id ? `<button class="cta ghost" style="margin:0;padding:10px 16px" onclick="descargarPDFDocumento('${d.id}')">📥 Descargar PDF</button>` : ''}
+        ${d.id ? `<button class="cta ghost" style="margin:0;padding:10px 16px" onclick="compartirWhatsApp('${d.id}')">📱 WhatsApp</button>` : ''}
+        <button class="cta ghost" style="margin:0;padding:10px 16px" onclick="switchTab('Admin')">✕ Cancelar</button>
+      </div>
     </div>
 
-    <!-- Formulario para añadir nueva línea -->
-    <div style="background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:14px">
-      <div style="font-weight:700;font-size:13px;margin-bottom:8px;color:var(--accent)">➕ Añadir línea de producto o servicio</div>
+    <!-- Cabecera de Datos (Grid de 2 Columnas STEL Order) -->
+    <div style="background:#fff;border:1px solid var(--line);border-radius:12px;padding:20px;margin-bottom:20px">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(320px, 1fr));gap:20px">
 
-      <label class="mini-lbl">Seleccionar o escribir producto/servicio</label>
-      <select class="fld-inp" id="df_linea_preset" onchange="onPresetLineaChange(this)">
-        <option value="Servicio de aromatización cuota mensual">Servicio de aromatización (cuota mensual)</option>
-        <option value="Stand de botes de 100 ml">Stand de botes de 100 ml</option>
-        <option value="Botes 100 ml (caja 25 uds)">Botes 100 ml (caja 25 uds)</option>
-        <option value="Difusor Turbo">Difusor Turbo</option>
-        <option value="OTRO">✏️ Escribir otro concepto personalizado...</option>
-      </select>
-
-      <input class="fld-inp" id="df_linea_concepto" type="text" placeholder="Ej: Stand de botes de 100 ml" style="display:none;margin-top:6px" value="Servicio de aromatización cuota mensual">
-
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+        <!-- Columna Izquierda -->
         <div>
-          <label class="mini-lbl">Cantidad</label>
-          <input class="fld-inp" id="df_linea_cant" type="number" min="1" value="1">
+          <div style="display:grid;grid-template-columns:120px 1fr;gap:10px;margin-bottom:12px;align-items:center">
+            <label class="mini-lbl" style="margin:0">Referencia</label>
+            <input class="fld-inp" type="text" value="${esc(d.numero)}" onchange="editorFacturaDraft.numero=this.value">
+          </div>
+
+          <div style="display:grid;grid-template-columns:120px 1fr;gap:10px;margin-bottom:12px;align-items:center">
+            <label class="mini-lbl" style="margin:0">Cliente *</label>
+            <select class="fld-inp" onchange="onEditorClienteChange(this.value)">
+              ${S.clientes.map(cl => `<option value="${cl.id}" ${cl.id === d.clienteId ? "selected" : ""}>${esc(cl.negocio)}</option>`).join("")}
+            </select>
+          </div>
+
+          <div style="display:grid;grid-template-columns:120px 1fr;gap:10px;margin-bottom:12px;align-items:center">
+            <label class="mini-lbl" style="margin:0">Forma de pago</label>
+            <select class="fld-inp" onchange="editorFacturaDraft.formaPago=this.value">
+              <option value="efectivo" ${d.formaPago === 'efectivo' ? 'selected' : ''}>💵 Efectivo</option>
+              <option value="domiciliacion" ${d.formaPago === 'domiciliacion' ? 'selected' : ''}>🏦 Domiciliación Bancaria</option>
+              <option value="transferencia" ${d.formaPago === 'transferencia' ? 'selected' : ''}>🏛️ Transferencia Bancaria</option>
+            </select>
+          </div>
+
+          <div style="display:grid;grid-template-columns:120px 1fr;gap:10px;align-items:center">
+            <label class="mini-lbl" style="margin:0">Impuestos (IVA)</label>
+            <select class="fld-inp" onchange="editorFacturaDraft.ivaPct=parseInt(this.value,10);drawEditorFactura()">
+              <option value="21" ${d.ivaPct === 21 ? 'selected' : ''}>21% IVA General</option>
+              <option value="0" ${d.ivaPct === 0 ? 'selected' : ''}>0% Sin IVA (Nota de trabajo / Exento)</option>
+            </select>
+          </div>
         </div>
+
+        <!-- Columna Derecha -->
         <div>
-          <label class="mini-lbl">Precio unit. (€, sin IVA)</label>
-          <input class="fld-inp" id="df_linea_precio" type="number" step="0.01" value="${c.importe || 30}">
+          <div style="display:grid;grid-template-columns:120px 1fr;gap:10px;margin-bottom:12px;align-items:center">
+            <label class="mini-lbl" style="margin:0">Fecha</label>
+            <input class="fld-inp" type="date" value="${d.fecha}" onchange="editorFacturaDraft.fecha=this.value">
+          </div>
+
+          <div style="display:grid;grid-template-columns:120px 1fr;gap:10px;margin-bottom:12px;align-items:center">
+            <label class="mini-lbl" style="margin:0">Estado</label>
+            <select class="fld-inp" onchange="editorFacturaDraft.estado=this.value">
+              <option value="emitida" ${d.estado === 'emitida' ? 'selected' : ''}>Emitida</option>
+              <option value="pendiente" ${d.estado === 'pendiente' ? 'selected' : ''}>Pendiente</option>
+              <option value="pagada" ${d.estado === 'pagada' ? 'selected' : ''}>Pagada</option>
+              <option value="vencida" ${d.estado === 'vencida' ? 'selected' : ''}>Vencida</option>
+            </select>
+          </div>
+
+          <div style="display:grid;grid-template-columns:120px 1fr;gap:10px;margin-bottom:12px;align-items:center">
+            <label class="mini-lbl" style="margin:0">Título / Asunto</label>
+            <input class="fld-inp" type="text" value="${esc(d.titulo)}" placeholder="Ej: Servicio de aromatización y recambios" onchange="editorFacturaDraft.titulo=this.value">
+          </div>
+
+          <div style="display:grid;grid-template-columns:120px 1fr;gap:10px;align-items:center">
+            <label class="mini-lbl" style="margin:0">Técnico / Agente</label>
+            <select class="fld-inp" onchange="editorFacturaDraft.tecnicoId=this.value">
+              ${S.tecnicos.map(t => `<option value="${t.id}" ${t.id === d.tecnicoId ? 'selected' : ''}>${esc(t.nombre)}</option>`).join("")}
+            </select>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Tabla de Líneas de Factura (Estilo STEL Order) -->
+    <div style="background:#fff;border:1px solid var(--line);border-radius:12px;padding:20px">
+      
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="cta" style="margin:0;padding:9px 16px;background:var(--accent)" onclick="anadirLineaCatDraft()">➕ Añadir productos del catálogo</button>
+          <button class="cta ghost" style="margin:0;padding:9px 16px" onclick="anadirLineaVaciaDraft()">➕ Nueva línea en blanco</button>
         </div>
       </div>
 
-      <button class="cta ghost" style="margin-top:10px;padding:8px" onclick="anadirLineaFactura('${tipoDoc}', '${c.id}')">➕ Añadir línea</button>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr style="background:var(--surface-2);border-bottom:2px solid var(--line)">
+              <th style="padding:10px;text-align:left;font-size:12px;color:var(--muted);width:100px">REF.</th>
+              <th style="padding:10px;text-align:left;font-size:12px;color:var(--muted);width:220px">NOMBRE *</th>
+              <th style="padding:10px;text-align:left;font-size:12px;color:var(--muted)">DESCRIPCIÓN</th>
+              <th style="padding:10px;text-align:right;font-size:12px;color:var(--muted);width:120px">PRECIO BASE (€)</th>
+              <th style="padding:10px;text-align:center;font-size:12px;color:var(--muted);width:80px">UDS.</th>
+              <th style="padding:10px;text-align:center;font-size:12px;color:var(--muted);width:80px">% DTO.</th>
+              <th style="padding:10px;text-align:right;font-size:12px;color:var(--muted);width:130px">SUBTOTAL (€)</th>
+              <th style="padding:10px;text-align:center;font-size:12px;color:var(--muted);width:50px"></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${d.lineas.map((l, idx) => {
+              const pBase = l.precioBase || 0;
+              const uds = l.uds || 1;
+              const dto = l.dto || 0;
+              const sub = Math.round(pBase * uds * (1 - dto / 100) * 100) / 100;
+              return `
+                <tr style="border-bottom:1px solid var(--line)">
+                  <td style="padding:6px 4px"><input class="fld-inp" style="padding:6px 8px;font-size:13px" value="${esc(l.ref)}" onchange="editorFacturaDraft.lineas[${idx}].ref=this.value"></td>
+                  <td style="padding:6px 4px"><input class="fld-inp" style="padding:6px 8px;font-size:13px;font-weight:600" value="${esc(l.nombre)}" onchange="editorFacturaDraft.lineas[${idx}].nombre=this.value"></td>
+                  <td style="padding:6px 4px"><input class="fld-inp" style="padding:6px 8px;font-size:13px" value="${esc(l.descripcion)}" placeholder="Detalles opcionales" onchange="editorFacturaDraft.lineas[${idx}].descripcion=this.value"></td>
+                  <td style="padding:6px 4px"><input class="fld-inp" style="padding:6px 8px;font-size:13px;text-align:right" type="number" step="0.01" value="${pBase}" onchange="editorFacturaDraft.lineas[${idx}].precioBase=parseFloat(this.value)||0;drawEditorFactura()"></td>
+                  <td style="padding:6px 4px"><input class="fld-inp" style="padding:6px 8px;font-size:13px;text-align:center" type="number" min="1" value="${uds}" onchange="editorFacturaDraft.lineas[${idx}].uds=parseFloat(this.value)||1;drawEditorFactura()"></td>
+                  <td style="padding:6px 4px"><input class="fld-inp" style="padding:6px 8px;font-size:13px;text-align:center" type="number" min="0" max="100" value="${dto}" onchange="editorFacturaDraft.lineas[${idx}].dto=parseFloat(this.value)||0;drawEditorFactura()"></td>
+                  <td style="padding:10px;text-align:right;font-weight:700;font-size:14px;color:var(--ink)">${EUR(sub)}</td>
+                  <td style="padding:6px 4px;text-align:center"><button class="mtag mt-crit" style="padding:4px 8px;cursor:pointer" onclick="quitarLineaDraft(${idx})">🗑️</button></td>
+                </tr>
+              `;
+            }).join("")}
+          </tbody>
+        </table>
+      </div>
+
+      <div style="display:flex;justify-content:flex-end;margin-top:20px">
+        <div style="width:300px;background:var(--surface-2);border-radius:10px;padding:16px">
+          <div style="display:flex;justify-content:space-between;font-size:14px;color:var(--muted);margin-bottom:8px">
+            <span>Total base (€):</span>
+            <b>${EUR(totalBase)}</b>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:14px;color:var(--muted);margin-bottom:8px">
+            <span>Cuota IVA (${d.ivaPct}%):</span>
+            <b>${EUR(cuotaIva)}</b>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:18px;font-weight:800;color:var(--accent-ink);padding-top:10px;border-top:2px solid var(--line)">
+            <span>Total (€):</span>
+            <span>${EUR(totalDoc)}</span>
+          </div>
+        </div>
+      </div>
+
     </div>
-
-    <label class="mini-lbl">Tipo de IVA</label>
-    <select class="fld-inp" id="df_ivaPct" onchange="drawCreadorFacturaSheet('${tipoDoc}', '${c.id}')">
-      <option value="21" ${selectedIvaPct === 21 ? "selected" : ""}>21% IVA General</option>
-      <option value="0" ${selectedIvaPct === 0 ? "selected" : ""}>0% Sin IVA (Nota de trabajo / Exento)</option>
-    </select>
-
-    <div style="background:var(--surface-2);border-radius:10px;padding:12px;margin:14px 0">
-      <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--muted)"><span>Base Imponible:</span><b>${EUR(baseTotal)}</b></div>
-      <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--muted);margin-top:4px"><span>IVA (${selectedIvaPct}%):</span><b>${EUR(cuotaIva)}</b></div>
-      <div style="display:flex;justify-content:space-between;font-size:16px;font-weight:800;color:var(--accent-ink);margin-top:8px;padding-top:8px;border-top:1px solid var(--line)"><span>TOTAL:</span><span>${EUR(totalDoc)}</span></div>
-    </div>
-
-    <button class="cta" onclick="emitirDocumentoMultiLinea('${tipoDoc}', '${c.id}')">🧾 Emitir ${titulos[tipoDoc] || "Documento"}</button>
-    <button class="cta ghost" onclick="closeSheet()">Cancelar</button>
   `;
 }
 
-function onPresetLineaChange(sel) {
-  const inp = document.getElementById("df_linea_concepto");
-  const pInp = document.getElementById("df_linea_precio");
-  if (sel.value === "OTRO") {
-    inp.style.display = "block";
-    inp.value = "";
-    inp.focus();
-  } else {
-    inp.style.display = "none";
-    inp.value = sel.value;
-    if (sel.value.includes("Stand")) pInp.value = 45;
-    else if (sel.value.includes("caja 25")) pInp.value = 93.75;
-    else if (sel.value.includes("Turbo")) pInp.value = 15;
+function onEditorClienteChange(cid) {
+  editorFacturaDraft.clienteId = cid;
+  const c = cliente(cid);
+  if (c) {
+    editorFacturaDraft.clienteNombre = c.negocio;
+    editorFacturaDraft.formaPago = c.formaHabitual || "efectivo";
+    editorFacturaDraft.ivaPct = c.notaTrabajo ? 0 : 21;
   }
+  drawEditorFactura();
 }
 
-function anadirLineaFactura(tipoDoc, clienteId) {
-  const sel = document.getElementById("df_linea_preset");
-  const customInp = document.getElementById("df_linea_concepto");
-  const cantInp = document.getElementById("df_linea_cant");
-  const precioInp = document.getElementById("df_linea_precio");
+function anadirLineaCatDraft() {
+  formSheet("Añadir producto del catálogo", [
+    { k: "preset", label: "Producto o Servicio", type: "select", val: "Servicio de aromatización cuota mensual", options: [
+      { v: "Servicio de aromatización cuota mensual", t: "Servicio de aromatización (cuota mensual)" },
+      { v: "Stand de botes de 100 ml", t: "Stand de botes de 100 ml (45 €)" },
+      { v: "Botes 100 ml (caja 25 uds)", t: "Botes 100 ml (caja 25 uds, 93.75 €)" },
+      { v: "Difusor Turbo", t: "Difusor Turbo (15 €)" },
+      { v: "OTRO", t: "✏️ Concepto personalizado..." }
+    ]},
+    { k: "uds", label: "Cantidad / Uds.", type: "number", val: 1 },
+    { k: "precioBase", label: "Precio base unitario (€, sin IVA)", type: "number", val: 30 }
+  ], vals => {
+    let nombre = vals.preset;
+    let precio = vals.precioBase;
+    if (vals.preset === "Stand de botes de 100 ml") precio = 45;
+    else if (vals.preset === "Botes 100 ml (caja 25 uds)") precio = 93.75;
+    else if (vals.preset === "Difusor Turbo") precio = 15;
+    else if (vals.preset === "OTRO") nombre = "Producto / Servicio personalizado";
 
-  const concepto = (sel.value === "OTRO" ? customInp.value : sel.value).trim();
-  const cantidad = parseFloat(cantInp.value) || 1;
-  const precioUnit = parseFloat(precioInp.value) || 0;
-
-  if (!concepto) { toast("Escribe la descripción del producto o servicio"); return; }
-  if (precioUnit <= 0) { toast("Indica un precio unitario válido"); return; }
-
-  docLinesDraft.push({ concepto, cantidad, precioUnit });
-  drawCreadorFacturaSheet(tipoDoc, clienteId);
+    editorFacturaDraft.lineas.push({
+      ref: "PROD-" + (editorFacturaDraft.lineas.length + 1),
+      nombre,
+      descripcion: "",
+      precioBase: precio > 0 ? precio : 30,
+      uds: vals.uds > 0 ? vals.uds : 1,
+      dto: 0
+    });
+    drawEditorFactura();
+  });
 }
 
-function quitarLineaFactura(idx, tipoDoc, clienteId) {
-  docLinesDraft.splice(idx, 1);
-  drawCreadorFacturaSheet(tipoDoc, clienteId);
+function anadirLineaVaciaDraft() {
+  editorFacturaDraft.lineas.push({
+    ref: "PROD-" + (editorFacturaDraft.lineas.length + 1),
+    nombre: "Nuevo producto o servicio",
+    descripcion: "",
+    precioBase: 0,
+    uds: 1,
+    dto: 0
+  });
+  drawEditorFactura();
 }
 
-function emitirDocumentoMultiLinea(tipoDoc, clienteId) {
-  const c = cliente(clienteId);
-  if (!c) { toast("Selecciona un cliente"); return; }
-  if (!docLinesDraft.length) { toast("Añade al menos una línea de producto o servicio"); return; }
+function quitarLineaDraft(idx) {
+  editorFacturaDraft.lineas.splice(idx, 1);
+  drawEditorFactura();
+}
+
+function guardarEditorFactura(emitir) {
+  const d = editorFacturaDraft;
+  if (!d) return;
+  const c = cliente(d.clienteId);
+  if (!c) { toast("Selecciona un cliente válido"); return; }
+  if (!d.lineas || !d.lineas.length) { toast("Añade al menos una línea de producto o servicio"); return; }
 
   let baseTotal = 0;
-  docLinesDraft.forEach(l => {
-    baseTotal += (l.cantidad || 1) * (l.precioUnit || 0);
+  d.lineas.forEach(l => {
+    const pBase = l.precioBase || 0;
+    const uds = l.uds || 1;
+    const dto = l.dto || 0;
+    baseTotal += pBase * uds * (1 - dto / 100);
   });
   baseTotal = Math.round(baseTotal * 100) / 100;
 
-  const ivaPct = parseInt(document.getElementById("df_ivaPct").value || "21", 10);
-  const cuotaIva = Math.round(baseTotal * (ivaPct / 100) * 100) / 100;
+  const cuotaIva = Math.round(baseTotal * (d.ivaPct / 100) * 100) / 100;
   const totalDoc = Math.round((baseTotal + cuotaIva) * 100) / 100;
-  const numero = siguienteNumero(tipoDoc);
 
-  const productoResumen = docLinesDraft.map(l => `${l.cantidad}× ${l.concepto}`).join(", ");
+  const productoResumen = d.titulo || d.lineas.map(l => `${l.uds}× ${l.nombre}`).join(", ");
 
   const doc = {
-    id: uid(),
-    numero,
-    tipo: tipoDoc,
+    id: d.id || uid(),
+    numero: d.numero || siguienteNumero(d.tipo),
+    tipo: d.tipo,
     clienteId: c.id,
     clienteNombre: c.negocio,
     producto: productoResumen,
-    lineas: [...docLinesDraft],
+    lineas: d.lineas.map(l => ({
+      ref: l.ref || "PROD",
+      concepto: l.nombre,
+      nombre: l.nombre,
+      descripcion: l.descripcion || "",
+      precioUnit: l.precioBase || 0,
+      cantidad: l.uds || 1,
+      precioBase: l.precioBase || 0,
+      uds: l.uds || 1,
+      dto: l.dto || 0
+    })),
     baseImponible: baseTotal,
-    ivaPct,
+    ivaPct: d.ivaPct,
     ivaCuota: cuotaIva,
     importe: totalDoc,
     total: totalDoc,
-    fecha: S.fecha,
-    estado: tipoDoc === "presupuesto" ? "pendiente" : "emitida",
-    cobrado: 0
+    fecha: d.fecha || S.fecha,
+    estado: emitir ? (d.tipo === "presupuesto" ? "pendiente" : "emitida") : (d.estado || "emitida"),
+    cobrado: d.id ? ((S.documentos || []).find(x => x.id === d.id)?.cobrado || 0) : 0
   };
 
-  (S.documentos = S.documentos || []).push(doc);
+  if (d.id) {
+    const idx = (S.documentos || []).findIndex(x => x.id === d.id);
+    if (idx >= 0) S.documentos[idx] = doc;
+    else (S.documentos = S.documentos || []).push(doc);
+  } else {
+    (S.documentos = S.documentos || []).push(doc);
+  }
+
   save();
-  closeSheet();
   renderAdmin();
-  toast(`✓ ${(TIPO_DOC[tipoDoc] ? TIPO_DOC[tipoDoc][1] : tipoDoc)} ${numero} emitida (${EUR(totalDoc)})`);
+  switchTab("Admin");
+  toast(`✓ ${(TIPO_DOC[d.tipo] ? TIPO_DOC[d.tipo][1] : d.tipo)} ${doc.numero} guardada (${EUR(totalDoc)})`);
 }
 function admFacturas(){
   const f=facturasFiltro; const opt=(v,t,sel)=>`<option value="${v}" ${v===sel?"selected":""}>${t}</option>`;
@@ -3674,6 +3856,7 @@ function admFacturas(){
         <div class="rd">${d.producto?esc(d.producto)+" · ":""}<b>${EUR(total)}</b> <span style="font-size:12px;color:var(--muted)">(Base ${EUR(base)} + IVA ${EUR(cuota)})</span>${st==='parcial'?` (cobrado ${EUR(d.cobrado||0)})`:""} · ${fmtDate(d.fecha)}${d.firma?" · ✍️ firmado":""}${d.adjuntos&&d.adjuntos.length?` · ${ic('paperclip',12)} ${d.adjuntos.length}`:""}</div></div>
       <button class="mtag mt-acc" onclick="event.stopPropagation();descargarPDFDocumento('${d.id}')">📥 Descargar PDF</button>
       <button class="mtag mt-good" onclick="event.stopPropagation();compartirWhatsApp('${d.id}')">📱 WhatsApp</button>
+      <button class="mtag mt-neutral" onclick="event.stopPropagation();abrirEditorExistente('${d.id}')">✏️ Editar</button>
       ${(d.tipo==='factura'||d.tipo==='rectificativa')?`<button class="mtag mt-warn" onclick="event.stopPropagation();crearRectificativa('${d.id}')">🔄 Rectificar</button>`:""}
       ${st==='pendiente'||st==='emitida'||st==='vencida'?`<button class="mtag mt-vio" onclick="event.stopPropagation();registrarCobroParcial('${d.id}')">Cobro parcial</button>`:""}
       ${(st==='pendiente'||st==='emitida'||st==='vencida'||st==='parcial')?`<button class="mtag mt-good" onclick="event.stopPropagation();marcarPagada('${d.id}')">Marcar pagada</button>`:""}
@@ -5434,12 +5617,27 @@ function applyRole(){
 
 /* ---- navegación ---- */
 function switchTab(name){
+  if(name==="EditorFactura"){
+    currentTab="EditorFactura";
+    document.querySelectorAll(".tab").forEach(t=>t.classList.remove("on"));
+    ["Inicio","Clientes","Caja","Historico","Gastos","Admin","EditorFactura"].forEach(v=>{
+      const el = document.getElementById("view"+v);
+      if(el) el.classList.toggle("hidden",v!=="EditorFactura");
+    });
+    tbSet("Editor de Facturas");
+    document.getElementById("rtpickWrap").style.display="none";
+    window.scrollTo(0,0);
+    return;
+  }
   if(name==="Admin" && !isAdmin()){ pedirClave('admin'); return; }
   if((name==="Gastos"||name==="Clientes") && isAdmin()){ name="Admin"; }
   if((name==="Inicio"||name==="Caja") && isAdmin()){ name="Admin"; } // el admin no ejecuta rutas
   currentTab=name;
   document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("on",t.dataset.tab===name));
-  ["Inicio","Clientes","Caja","Historico","Gastos","Admin"].forEach(v=>document.getElementById("view"+v).classList.toggle("hidden",v!==name));
+  ["Inicio","Clientes","Caja","Historico","Gastos","Admin","EditorFactura"].forEach(v=>{
+    const el = document.getElementById("view"+v);
+    if(el) el.classList.toggle("hidden",v!==name);
+  });
   const titles={Inicio:currentRuta()?currentRuta().nombre:"AMBIÉNTATE",Clientes:"Clientes",Caja:"Jornada laboral",Historico:"Histórico",Gastos:"Gastos",Admin:"Administración"};
   tbSet(titles[name]);
   document.getElementById("rtpickWrap").style.display = (name==="Inicio")?"flex":"none";
