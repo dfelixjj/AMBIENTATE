@@ -2705,7 +2705,7 @@ const ADMIN_SECTIONS = [
   { id: 'rutas', label: 'Rutas', icon: 'route', desc: 'Recorridos y planificación' },
   { id: 'aromas', label: 'Aromas y Difusores', icon: 'droplet', desc: 'Catálogo de fragancias' },
   { id: 'tecnicos', label: 'Técnicos', icon: 'hardhat', desc: 'Equipo y licencias' },
-  { id: 'config', label: 'Configuración', icon: 'settings', desc: 'Ajustes y datos empresa' },
+  { id: 'datos', label: 'Configuración y Accesos (1703)', icon: 'settings', desc: 'Auditoría 1703, datos de empresa y respaldo' },
 ];
 
 let adminMenuOpen = false;
@@ -3317,7 +3317,17 @@ function admDashboard(){
   const labelContrato = {nuevo:"Nuevo", presupuesto:"Presupuesto enviado", aceptado:"Aceptado"};
   const donutData = estadosContrato.map(e=>({v:S.clientes.filter(c=>c.activo!==false && ((c.contrato&&c.contrato.estado)||"nuevo")===e).length, color:coloresContrato[e], label:labelContrato[e]}));
 
-  return quickbar+`<div class="kpis">${kpis}</div>
+  const cardAuditoria = `<div class="row" style="display:block;padding:14px;background:var(--surface-2);border-radius:12px;border:1.5px solid var(--accent);margin-bottom:12px">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+      <div>
+        <div class="rn" style="font-size:15px;color:var(--accent-ink)">🔒 Registro de Accesos y Auditoría de Seguridad</div>
+        <div class="rd" style="line-height:1.5">Consulta quién ha entrado a la demo, fecha/hora, dispositivo y ubicación (requiere PIN 1703).</div>
+      </div>
+      <button class="addbtn" style="border-color:var(--accent);color:var(--accent);font-weight:800;margin:0" onclick="abrirModuloAccesos()">🔑 Ver accesos (PIN 1703)</button>
+    </div>
+  </div>`;
+
+  return cardAuditoria+quickbar+`<div class="kpis">${kpis}</div>
     <div class="charts-grid">
       <div class="chart-card"><h3>Facturación mensual (últimos 6 meses)</h3>${barChart(facturaPorMes,{h:170})}</div>
       <div class="chart-card"><h3>Estado de presupuestos</h3>
