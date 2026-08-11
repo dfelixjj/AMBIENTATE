@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ambientate-v6';
+const CACHE_NAME = 'ambientate-v8';
 const ASSETS = [
   './',
   './index.html',
@@ -8,11 +8,6 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', event => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => {
-      return cache.addAll(ASSETS);
-    })
-  );
   self.skipWaiting();
 });
 
@@ -20,23 +15,30 @@ self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(keys => {
       return Promise.all(
-        keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
+        keys.map(k => caches.delete(k))
       );
     })
   );
   self.clients.claim();
 });
 
+// Estrategia Network-First para index.html: carga siempre la versión más reciente del servidor
 self.addEventListener('fetch', event => {
-  if (event.request.method !== 'GET') return;
+  if (event.request.method !== 'GET' || event.request.url.includes('/api/')) return;
+
   event.respondWith(
-    caches.match(event.request).then(cached => {
-      return cached || fetch(event.request).then(response => {
-        return caches.open(CACHE_NAME).then(cache => {
-          cache.put(event.request, response.clone());
-          return response;
+    fetch(event.request)
+      .then(networkResponse => {
+        if (networkResponse && networkResponse.status === 200) {
+          const responseToCache = networkResponse.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, responseToCache));
+        }
+        return networkResponse;
+      })
+      .catch(() => {
+        return caches.match(event.request).then(cachedResponse => {
+          return cachedResponse || caches.match('./index.html');
         });
-      }).catch(() => caches.match('./index.html'));
-    })
+      })
   );
 });
