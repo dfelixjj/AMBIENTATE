@@ -3217,7 +3217,7 @@ function siguienteNumero(tipo){
   return `${cfg.prefijo||""}${serie}/${String(n).padStart(4,"0")}`;
 }
 
-/* ---- FASE 2: MOTOR DE PDF Y RECTIFICATIVAS ---- */
+/* ---- FASE 2: MOTOR DE PDF MULTI-LÍNEA Y RECTIFICATIVAS ---- */
 function descargarPDFDocumento(docId) {
   const d = (S.documentos || []).find(x => x.id === docId);
   if (!d) return;
@@ -3304,18 +3304,29 @@ function descargarPDFDocumento(docId) {
       pdf.text(`Forma de pago: ${formaLabel}`, 112, 60);
       pdf.text(`Estado del cobro: ${(ESTADO_FACTURA_UI[estadoFactura(d)] || {label:'Emitida'}).label}`, 112, 66);
 
-      // Tabla de conceptos
+      // Tabla de conceptos / productos
       const startY = 85;
       const headers = [['CONCEPTO / DESCRIPCIÓN', 'CANT.', 'BASE UNIT.', 'IVA %', 'TOTAL (€)']];
-      const rows = [
-        [
-          d.producto || 'Servicio de aromatización y mantenimiento preventivo',
-          '1',
-          `${baseImponible.toFixed(2)} €`,
-          `${ivaPct}%`,
-          `${total.toFixed(2)} €`
-        ]
-      ];
+      let rows = [];
+
+      if (Array.isArray(d.lineas) && d.lineas.length) {
+        rows = d.lineas.map(l => {
+          const cant = l.cantidad || 1;
+          const pu = l.precioUnit || 0;
+          const totL = Math.round(cant * pu * (1 + ivaPct / 100) * 100) / 100;
+          return [l.concepto, cant.toString(), `${pu.toFixed(2)} €`, `${ivaPct}%`, `${totL.toFixed(2)} €`];
+        });
+      } else {
+        rows = [
+          [
+            d.producto || 'Servicio de aromatización y mantenimiento preventivo',
+            '1',
+            `${baseImponible.toFixed(2)} €`,
+            `${ivaPct}%`,
+            `${total.toFixed(2)} €`
+          ]
+        ];
+      }
 
       if (typeof pdf.autoTable === 'function') {
         pdf.autoTable({
@@ -3433,6 +3444,199 @@ function crearRectificativa(docId) {
     (S.documentos = S.documentos || []).push(doc);
     save(); renderAdmin(); toast("🔄 Factura rectificativa " + numero + " emitida");
   });
+}
+
+/* ---- CREADOR MULTI-LÍNEA DE DOCUMENTOS ---- */
+let docLinesDraft = [];
+
+function nuevoDocumentoManual(tipoDoc, preselectedCid) {
+  if (!S.clientes || !S.clientes.length) { toast("Crea primero un cliente en la pestaña Clientes"); return; }
+  const cSel = cliente(preselectedCid) || S.clientes[0];
+  
+  docLinesDraft = [
+    {
+      concepto: tipoDoc === "presupuesto" ? "Servicio de aromatización y mantenimiento" : "Servicio de aromatización cuota mensual",
+      cantidad: 1,
+      precioUnit: cSel.importe || 30
+    }
+  ];
+  
+  drawCreadorFacturaSheet(tipoDoc || "factura", cSel.id);
+  openSheet();
+}
+
+function drawCreadorFacturaSheet(tipoDoc, clienteId) {
+  const c = cliente(clienteId) || S.clientes[0];
+  const titulos = { factura: "Nueva Factura", presupuesto: "Nuevo Presupuesto", albaran: "Nuevo Albarán / Nota de entrega" };
+  const isNota = c.notaTrabajo;
+
+  let baseTotal = 0;
+  docLinesDraft.forEach(l => {
+    baseTotal += (l.cantidad || 1) * (l.precioUnit || 0);
+  });
+  baseTotal = Math.round(baseTotal * 100) / 100;
+
+  const selectedIvaPct = parseInt(document.getElementById("df_ivaPct")?.value || (isNota ? "0" : "21"), 10);
+  const cuotaIva = Math.round(baseTotal * (selectedIvaPct / 100) * 100) / 100;
+  const totalDoc = Math.round((baseTotal + cuotaIva) * 100) / 100;
+
+  const sh = document.getElementById("sheet");
+  sh.innerHTML = `
+    <div class="grab"></div>
+    <h2>${titulos[tipoDoc] || "Nuevo documento"}</h2>
+    <p class="sub">Añade productos o servicios personalizados a este documento</p>
+
+    <label class="mini-lbl">Cliente</label>
+    <select class="fld-inp" id="df_clienteId" onchange="drawCreadorFacturaSheet('${tipoDoc}', this.value)">
+      ${S.clientes.map(cl => `<option value="${cl.id}" ${cl.id === c.id ? "selected" : ""}>${esc(cl.negocio)} (${esc(cl.direccion || "Sin dir.")})</option>`).join("")}
+    </select>
+
+    <label class="mini-lbl">Tipo de documento</label>
+    <select class="fld-inp" id="df_tipoDoc" onchange="drawCreadorFacturaSheet(this.value, '${c.id}')">
+      <option value="factura" ${tipoDoc === "factura" ? "selected" : ""}>🧾 Factura</option>
+      <option value="presupuesto" ${tipoDoc === "presupuesto" ? "selected" : ""}>📄 Presupuesto</option>
+      <option value="albaran" ${tipoDoc === "albaran" ? "selected" : ""}>📝 Albarán / Nota de entrega</option>
+    </select>
+
+    <div class="sec-t" style="margin-top:14px">Líneas de producto / servicio (${docLinesDraft.length})</div>
+
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
+      ${docLinesDraft.map((l, idx) => `
+        <div class="row" style="padding:10px 12px;background:var(--surface-2);border-radius:8px">
+          <div class="rm">
+            <div class="rn">${esc(l.concepto)}</div>
+            <div class="rd">${l.cantidad} ud(s) × ${EUR(l.precioUnit)} = <b>${EUR(Math.round(l.cantidad * l.precioUnit * 100) / 100)}</b></div>
+          </div>
+          <button class="mtag mt-crit" onclick="quitarLineaFactura(${idx}, '${tipoDoc}', '${c.id}')">🗑️</button>
+        </div>
+      `).join("")}
+    </div>
+
+    <!-- Formulario para añadir nueva línea -->
+    <div style="background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:14px">
+      <div style="font-weight:700;font-size:13px;margin-bottom:8px;color:var(--accent)">➕ Añadir línea de producto o servicio</div>
+
+      <label class="mini-lbl">Seleccionar o escribir producto/servicio</label>
+      <select class="fld-inp" id="df_linea_preset" onchange="onPresetLineaChange(this)">
+        <option value="Servicio de aromatización cuota mensual">Servicio de aromatización (cuota mensual)</option>
+        <option value="Stand de botes de 100 ml">Stand de botes de 100 ml</option>
+        <option value="Botes 100 ml (caja 25 uds)">Botes 100 ml (caja 25 uds)</option>
+        <option value="Difusor Turbo">Difusor Turbo</option>
+        <option value="OTRO">✏️ Escribir otro concepto personalizado...</option>
+      </select>
+
+      <input class="fld-inp" id="df_linea_concepto" type="text" placeholder="Ej: Stand de botes de 100 ml" style="display:none;margin-top:6px" value="Servicio de aromatización cuota mensual">
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+        <div>
+          <label class="mini-lbl">Cantidad</label>
+          <input class="fld-inp" id="df_linea_cant" type="number" min="1" value="1">
+        </div>
+        <div>
+          <label class="mini-lbl">Precio unit. (€, sin IVA)</label>
+          <input class="fld-inp" id="df_linea_precio" type="number" step="0.01" value="${c.importe || 30}">
+        </div>
+      </div>
+
+      <button class="cta ghost" style="margin-top:10px;padding:8px" onclick="anadirLineaFactura('${tipoDoc}', '${c.id}')">➕ Añadir línea</button>
+    </div>
+
+    <label class="mini-lbl">Tipo de IVA</label>
+    <select class="fld-inp" id="df_ivaPct" onchange="drawCreadorFacturaSheet('${tipoDoc}', '${c.id}')">
+      <option value="21" ${selectedIvaPct === 21 ? "selected" : ""}>21% IVA General</option>
+      <option value="0" ${selectedIvaPct === 0 ? "selected" : ""}>0% Sin IVA (Nota de trabajo / Exento)</option>
+    </select>
+
+    <div style="background:var(--surface-2);border-radius:10px;padding:12px;margin:14px 0">
+      <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--muted)"><span>Base Imponible:</span><b>${EUR(baseTotal)}</b></div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--muted);margin-top:4px"><span>IVA (${selectedIvaPct}%):</span><b>${EUR(cuotaIva)}</b></div>
+      <div style="display:flex;justify-content:space-between;font-size:16px;font-weight:800;color:var(--accent-ink);margin-top:8px;padding-top:8px;border-top:1px solid var(--line)"><span>TOTAL:</span><span>${EUR(totalDoc)}</span></div>
+    </div>
+
+    <button class="cta" onclick="emitirDocumentoMultiLinea('${tipoDoc}', '${c.id}')">🧾 Emitir ${titulos[tipoDoc] || "Documento"}</button>
+    <button class="cta ghost" onclick="closeSheet()">Cancelar</button>
+  `;
+}
+
+function onPresetLineaChange(sel) {
+  const inp = document.getElementById("df_linea_concepto");
+  const pInp = document.getElementById("df_linea_precio");
+  if (sel.value === "OTRO") {
+    inp.style.display = "block";
+    inp.value = "";
+    inp.focus();
+  } else {
+    inp.style.display = "none";
+    inp.value = sel.value;
+    if (sel.value.includes("Stand")) pInp.value = 45;
+    else if (sel.value.includes("caja 25")) pInp.value = 93.75;
+    else if (sel.value.includes("Turbo")) pInp.value = 15;
+  }
+}
+
+function anadirLineaFactura(tipoDoc, clienteId) {
+  const sel = document.getElementById("df_linea_preset");
+  const customInp = document.getElementById("df_linea_concepto");
+  const cantInp = document.getElementById("df_linea_cant");
+  const precioInp = document.getElementById("df_linea_precio");
+
+  const concepto = (sel.value === "OTRO" ? customInp.value : sel.value).trim();
+  const cantidad = parseFloat(cantInp.value) || 1;
+  const precioUnit = parseFloat(precioInp.value) || 0;
+
+  if (!concepto) { toast("Escribe la descripción del producto o servicio"); return; }
+  if (precioUnit <= 0) { toast("Indica un precio unitario válido"); return; }
+
+  docLinesDraft.push({ concepto, cantidad, precioUnit });
+  drawCreadorFacturaSheet(tipoDoc, clienteId);
+}
+
+function quitarLineaFactura(idx, tipoDoc, clienteId) {
+  docLinesDraft.splice(idx, 1);
+  drawCreadorFacturaSheet(tipoDoc, clienteId);
+}
+
+function emitirDocumentoMultiLinea(tipoDoc, clienteId) {
+  const c = cliente(clienteId);
+  if (!c) { toast("Selecciona un cliente"); return; }
+  if (!docLinesDraft.length) { toast("Añade al menos una línea de producto o servicio"); return; }
+
+  let baseTotal = 0;
+  docLinesDraft.forEach(l => {
+    baseTotal += (l.cantidad || 1) * (l.precioUnit || 0);
+  });
+  baseTotal = Math.round(baseTotal * 100) / 100;
+
+  const ivaPct = parseInt(document.getElementById("df_ivaPct").value || "21", 10);
+  const cuotaIva = Math.round(baseTotal * (ivaPct / 100) * 100) / 100;
+  const totalDoc = Math.round((baseTotal + cuotaIva) * 100) / 100;
+  const numero = siguienteNumero(tipoDoc);
+
+  const productoResumen = docLinesDraft.map(l => `${l.cantidad}× ${l.concepto}`).join(", ");
+
+  const doc = {
+    id: uid(),
+    numero,
+    tipo: tipoDoc,
+    clienteId: c.id,
+    clienteNombre: c.negocio,
+    producto: productoResumen,
+    lineas: [...docLinesDraft],
+    baseImponible: baseTotal,
+    ivaPct,
+    ivaCuota: cuotaIva,
+    importe: totalDoc,
+    total: totalDoc,
+    fecha: S.fecha,
+    estado: tipoDoc === "presupuesto" ? "pendiente" : "emitida",
+    cobrado: 0
+  };
+
+  (S.documentos = S.documentos || []).push(doc);
+  save();
+  closeSheet();
+  renderAdmin();
+  toast(`✓ ${(TIPO_DOC[tipoDoc] ? TIPO_DOC[tipoDoc][1] : tipoDoc)} ${numero} emitida (${EUR(totalDoc)})`);
 }
 function admFacturas(){
   const f=facturasFiltro; const opt=(v,t,sel)=>`<option value="${v}" ${v===sel?"selected":""}>${t}</option>`;
