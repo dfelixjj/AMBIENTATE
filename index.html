@@ -3,9 +3,6 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-<meta http-equiv="Pragma" content="no-cache">
-<meta http-equiv="Expires" content="0">
 <meta name="theme-color" content="#0F8A7E">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -564,21 +561,13 @@
   </div>
 
   <main id="views">
-    <section id="viewInicio" class="view" role="region" aria-label="Ruta de hoy">
-      <div id="initLoader" style="padding:40px 20px;text-align:center;color:var(--ink)">
-        <div style="font-size:36px;margin-bottom:10px">🚚</div>
-        <div style="font-weight:800;font-size:16px;margin-bottom:4px">Cargando AMBIÉNTATE...</div>
-        <div style="font-size:13px;color:var(--muted);margin-bottom:18px">Si la pantalla no cambia en 2 segundos, pulsa el botón inferior:</div>
-        <button class="cta" onclick="localStorage.clear();location.reload(true)" style="margin:0 auto;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 20px;font-size:13.5px">
-          🔄 Desbloquear y limpiar caché
-        </button>
-      </div>
-    </section>
+    <section id="viewInicio" class="view" role="region" aria-label="Ruta de hoy"></section>
     <section id="viewClientes" class="view hidden" role="region" aria-label="Clientes"></section>
     <section id="viewCaja" class="view hidden" role="region" aria-label="Jornada laboral"></section>
     <section id="viewHistorico" class="view hidden" role="region" aria-label="Histórico"></section>
     <section id="viewAdmin" class="view hidden" role="region" aria-label="Administración"></section>
     <section id="viewGastos" class="view hidden" role="region" aria-label="Gastos"></section>
+    <section id="viewEditorFactura" class="view hidden" role="region" aria-label="Editor de Facturas"></section>
   </main>
 
   <nav class="tabbar">
@@ -605,47 +594,13 @@
 
 <script>
 "use strict";
-/* ---- diagnóstico: captura errores JS, previene bloqueos y muestra pantalla de recuperación ---- */
+/* ---- diagnóstico: captura errores JS y los muestra en pantalla ---- */
 window.onerror = function(msg, src, line, col, err) {
-  console.error('❌ ERROR JS:', msg, 'Línea:', line, 'Col:', col, err);
-  const views = document.getElementById("views");
-  if (views && (!views.firstElementChild || views.firstElementChild.children.length === 0 || views.innerText.trim() === "")) {
-    showRecoveryScreen(err || msg);
-  }
+  var d = document.createElement('div');
+  d.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#D92D20;color:#fff;padding:16px 20px;font:14px/1.5 monospace;white-space:pre-wrap;word-break:break-all';
+  d.textContent = '❌ ERROR JS:\n' + msg + '\nLínea: ' + line + ', Col: ' + col + '\n' + (err && err.stack ? err.stack : '');
+  document.body.prepend(d);
 };
-window.onunhandledrejection = function(event) {
-  console.warn('⚠️ Promesa no capturada:', event.reason);
-};
-
-function showRecoveryScreen(err) {
-  const views = document.getElementById("views");
-  if (!views) return;
-  views.innerHTML = `
-    <div style="padding:32px 20px;text-align:center;background:var(--surface);border-radius:18px;margin:20px 12px;box-shadow:var(--shadow);border:1px solid var(--line)">
-      <div style="font-size:44px;margin-bottom:12px">⚡</div>
-      <h2 style="font-size:18px;font-weight:800;color:var(--ink);margin:0 0 8px">Se ha detectado un bloqueo de pantalla</h2>
-      <p style="font-size:13.5px;color:var(--muted);margin:0 0 20px;line-height:1.4">La aplicación ha prevenido un error de renderizado. Puedes restaurar la vista inmediatamente sin perder tus datos.</p>
-      <button class="cta" onclick="recuperarApp()" style="margin:0 auto;display:inline-flex;align-items:center;justify-content:center;gap:8px">
-        🔄 Restaurar y volver a cargar
-      </button>
-    </div>
-  `;
-}
-
-function recuperarApp() {
-  try {
-    localStorage.removeItem(LS_KEY);
-    S = seed();
-    patchState(S);
-    save();
-    renderAll();
-    switchTab("Inicio");
-    if (typeof toast === "function") toast("✓ Estado restaurado correctamente");
-  } catch(e) {
-    location.reload();
-  }
-}
-
 
 /* ---- CAPA API: comunicación con el backend SQLite ---- */
 const API_BASE = location.protocol === 'file:' ? 'http://localhost:4000' : location.origin;
@@ -861,6 +816,7 @@ function consumoTabla(map){
 
 /* chip visible de forma de pago habitual */
 function formaChip(f){
+  if(f==="domiciliacion") return '<span class="mtag mt-acc">🏦 Banco</span>';
   if(f==="pendiente") return '<span class="mtag mt-warn">⏳ Pendiente</span>';
   return '<span class="mtag mt-amb">💵 Efectivo</span>';
 }
@@ -883,74 +839,43 @@ var S = load();
 var currentTab = "Inicio";
 
 function load(){
-  try{
-    const raw = localStorage.getItem(LS_KEY);
-    if(raw){
-      const s = JSON.parse(raw);
-      if(s && typeof s === "object"){
-        patchState(s);
-        try{ localStorage.setItem(LS_KEY, JSON.stringify(s)); }catch(err){}
-        return s;
-      }
-    }
-  }catch(e){
-    console.warn("⚠️ Error leyendo localStorage, regenerando datos:", e);
-  }
-  const s = seed();
-  patchState(s);
-  return s;
+  try{ const raw = localStorage.getItem(LS_KEY); if(raw){ const s=JSON.parse(raw);
+    patchState(s);
+    try{ localStorage.setItem(LS_KEY, JSON.stringify(s)); }catch(err){}
+    return s; } }catch(e){}
+  return seed();
 }
 // Aplica defaults/migraciones al estado cargado (desde localStorage o del servidor)
 function patchState(s){
-    if(!s || typeof s !== "object") return;
-    if(!Array.isArray(s.aromas) || !s.aromas.length) s.aromas=DEFAULT_AROMAS.slice();
-    if(!Array.isArray(s.sectores) || !s.sectores.length) s.sectores=DEFAULT_SECTORES.slice();
-    if(!Array.isArray(s.rutas)) s.rutas=[];
-    if(!Array.isArray(s.clientes)) s.clientes=[];
-    if(!Array.isArray(s.tecnicos)) s.tecnicos=[];
-    if(!s.jornadas || typeof s.jornadas !== "object" || Array.isArray(s.jornadas)) s.jornadas={};
-    if(!Array.isArray(s.gastos)) s.gastos=[];
-    if(!Array.isArray(s.tareas)) s.tareas=[];
-    if(!s.reprogram || typeof s.reprogram !== "object") s.reprogram={};
-    if(!s.aromaCoste || typeof s.aromaCoste !== "object") s.aromaCoste={};
-    if(!s.aromaCategoria || typeof s.aromaCategoria !== "object") s.aromaCategoria={};
-    if(!s.aromaProveedor || typeof s.aromaProveedor !== "object") s.aromaProveedor={};
-    if(!Array.isArray(s.eventos)) s.eventos=[];
-    if(!s.aromaCompra || typeof s.aromaCompra !== "object"){
+    if(!s.aromas||!s.aromas.length) s.aromas=DEFAULT_AROMAS.slice();
+    if(!s.sectores||!s.sectores.length) s.sectores=DEFAULT_SECTORES.slice();
+    if(!s.tareas) s.tareas=[];
+    if(!s.reprogram) s.reprogram={};
+    if(!s.aromaCoste) s.aromaCoste={};
+    if(!s.aromaCategoria) s.aromaCategoria={};
+    if(!s.aromaProveedor) s.aromaProveedor={};
+    if(!s.eventos) s.eventos=[];
+    if(!s.aromaCompra){
       s.aromaCompra={}; Object.keys(s.aromaCoste).forEach(a=>{ s.aromaCompra[a]={"Litro nebulización":s.aromaCoste[a]}; });
     }
-    if(!s.formatoVenta || typeof s.formatoVenta !== "object") s.formatoVenta={"Litro nebulización":150,"Bote hidroalcohólico":13,"Bacteriostático":0};
-    if(!Array.isArray(s.fichajes)) s.fichajes=[];
-    if(!Array.isArray(s.documentos)) s.documentos=[];
-    if(!Array.isArray(s.solicitudes)) s.solicitudes=[];
+    if(!s.formatoVenta) s.formatoVenta={"Litro nebulización":150,"Bote hidroalcohólico":13,"Bacteriostático":0};
+    if(!s.fichajes) s.fichajes=[];
+    if(!s.documentos) s.documentos=[];
+    if(!s.solicitudes) s.solicitudes=[];
     if(s.autoClose===undefined) s.autoClose=false;
-    if(!s.empresa || typeof s.empresa !== "object") s.empresa=DEFAULT_EMPRESA;
-    if(!Array.isArray(s.proveedores)) s.proveedores=[];
-    if(!Array.isArray(s.vehiculos)) s.vehiculos=[];
-    if(!Array.isArray(s.dispositivos) || !s.dispositivos.length) s.dispositivos=DISPOSITIVOS_DEFAULT.slice();
-    if(!s.stockDifusores || typeof s.stockDifusores !== "object") s.stockDifusores={};
+    if(!s.empresa) s.empresa=DEFAULT_EMPRESA;
+    if(!s.proveedores) s.proveedores=[];
+    if(!s.vehiculos) s.vehiculos=[];
+    if(!s.dispositivos||!s.dispositivos.length) s.dispositivos=DISPOSITIVOS_DEFAULT.slice();
+    if(!s.stockDifusores) s.stockDifusores={};
     if(!s.ivaPct) s.ivaPct=21;
-    (s.rutas||[]).forEach(r=>{ if(r && r.municipio===undefined) r.municipio=""; });
-    if(!s.numeracion || typeof s.numeracion !== "object") s.numeracion={factura:{prefijo:"FAC-",siguiente:1},presupuesto:{prefijo:"PRE-",siguiente:1},albaran:{prefijo:"ALB-",siguiente:1}};
+    (s.rutas||[]).forEach(r=>{ if(r.municipio===undefined) r.municipio=""; });
+    if(!s.numeracion) s.numeracion={factura:{prefijo:"FAC-",siguiente:1},presupuesto:{prefijo:"PRE-",siguiente:1},albaran:{prefijo:"ALB-",siguiente:1}};
     (s.tecnicos||[]).forEach(t=>{
-      if(t){
-        if(t.id==="t1" || t.nombre==="Juan Martín") t.nombre="Técnico 1";
-        if(t.id==="t2" || t.nombre==="Ana López") t.nombre="Técnico 2";
-        if(t.id==="t3" || t.nombre==="Marta Ruiz") t.nombre="Técnico 3";
-      }
+      if(t.id==="t1" || t.nombre==="Juan Martín") t.nombre="Técnico 1";
+      if(t.id==="t2" || t.nombre==="Ana López") t.nombre="Técnico 2";
+      if(t.id==="t3" || t.nombre==="Marta Ruiz") t.nombre="Técnico 3";
     });
-    if(!s.session || typeof s.session !== "object" || !s.session.role) {
-      s.session = { role: "admin", tecnicoId: null };
-    }
-    if(!s.fecha) s.fecha = todayISO();
-    // Si las entidades clave están totalmente vacías, auto-reparar con seed
-    if(!s.rutas.length && !s.clientes.length && !s.tecnicos.length) {
-      const seeded = seed();
-      s.rutas = seeded.rutas;
-      s.clientes = seeded.clientes;
-      s.tecnicos = seeded.tecnicos;
-      s.jornadas = seeded.jornadas;
-    }
 }
 // Almacenamiento: localStorage tiene ~5 MB. Las fotos de gasto (base64) pueden agotarlo.
 // MEJORA FUTURA: mover las fotos a IndexedDB (sin límite práctico) y guardar solo la referencia aquí.
@@ -1229,38 +1154,28 @@ function cliente(id){ return S.clientes.find(c=>c.id===id); }
 function tecnico(id){ return S.tecnicos.find(t=>t.id===id); }
 // rutas visibles según el perfil: admin ve todas, técnico solo las suyas
 function availableRutas(){
-  if(!S || !Array.isArray(S.rutas)) return [];
-  if(S.session && S.session.role==="tecnico"){
-    const list = S.rutas.filter(r=>r && r.tecnicoId===S.session.tecnicoId);
-    return list.length ? list : S.rutas; // Fallback a todas si no tiene ninguna asignada para evitar vistas vacías
-  }
+  if(S.session && S.session.role==="tecnico") return S.rutas.filter(r=>r.tecnicoId===S.session.tecnicoId);
   return S.rutas;
 }
-function currentRuta(){
-  const rs = availableRutas();
-  if(!rs || !rs.length) return null;
-  return rs.find(r=>r && r.id===S.rutaSel) || rs[0];
-}
+function currentRuta(){ const rs=availableRutas(); return rs.find(r=>r.id===S.rutaSel) || rs[0]; }
 function isAdmin(){ return !S.session || S.session.role==="admin"; }
 
 function stats(j){
   let cobradoEf=0, cobradoBanco=0, pendienteCobro=0, ventas=0, ventasN=0, incid=0, realizadas=0, pendientes=0, previsto=0;
-  if(j && Array.isArray(j.visitas)) {
-    j.visitas.forEach(v=>{
-      const c = cliente(v.clienteId); if(c) previsto += c.importe||0;
-      if(v.estado==="realizada"){ realizadas++;
-        if(v.cobro){ if(v.cobro.forma==="efectivo") cobradoEf+=v.cobro.importe;
-          else if(v.cobro.forma==="domiciliacion") cobradoBanco+=v.cobro.importe;
-          else pendienteCobro+=v.cobro.importe; }
-      } else if(["cerrado","ausente","incidencia","pendiente","programada"].includes(v.estado)){ if(v.estado!=="programada") pendientes++; }
-      if(v.ventaAdic){ ventas+=v.ventaAdic.importe||0; ventasN++; }
-      if(v.incidencia) incid++;
-    });
-  }
+  j.visitas.forEach(v=>{
+    const c = cliente(v.clienteId); if(c) previsto += c.importe||0;
+    if(v.estado==="realizada"){ realizadas++;
+      if(v.cobro){ if(v.cobro.forma==="efectivo") cobradoEf+=v.cobro.importe;
+        else if(v.cobro.forma==="domiciliacion") cobradoBanco+=v.cobro.importe;
+        else pendienteCobro+=v.cobro.importe; }
+    } else if(["cerrado","ausente","incidencia","pendiente","programada"].includes(v.estado)){ if(v.estado!=="programada") pendientes++; }
+    if(v.ventaAdic){ ventas+=v.ventaAdic.importe||0; ventasN++; }
+    if(v.incidencia) incid++;
+  });
   // pendientes: contamos cerrado/ausente/incidencia + programadas restantes al cerrar
-  const noResueltas = (j && Array.isArray(j.visitas)) ? j.visitas.filter(v=>v.estado!=="realizada").length : 0;
+  const noResueltas = j.visitas.filter(v=>v.estado!=="realizada").length;
   const produccion = cobradoEf + cobradoBanco + ventas;
-  return {programados:(j && Array.isArray(j.visitas))?j.visitas.length:0, realizadas, pendientes:noResueltas, cobradoEf, cobradoBanco,
+  return {programados:j.visitas.length, realizadas, pendientes:noResueltas, cobradoEf, cobradoBanco,
     pendienteCobro, ventas, ventasN, incid, produccion, previsto};
 }
 
@@ -1360,41 +1275,18 @@ function donutChart(segments, size){
 }
 
 /* ==================== RENDER ==================== */
-function safeRender(name, fn) {
-  try {
-    fn();
-  } catch(err) {
-    console.error("⚠️ Error ejecutando " + name + ":", err);
-  }
-}
-
 function renderAll(){
-  try {
-    if(!S || typeof S !== "object") S = load();
-    patchState(S);
-    applyRole();
-    const av=document.getElementById("tbAv");
-    if(av) {
-      if(S.session && S.session.role==="tecnico"){ const t=tecnico(S.session.tecnicoId); av.textContent=t?inits(t.nombre):"–"; }
-      else av.innerHTML=ICON_ADMIN;
-    }
-    const ruta = currentRuta();
-    if(!ruta){ renderNoRutas(); return; }
-    S.rutaSel = ruta.id;
-    const tbDate = document.getElementById("tbDate");
-    if(tbDate) tbDate.textContent = fmtDate(S.fecha);
-    fillRutaSelect();
-    safeRender("renderInicio", renderInicio);
-    safeRender("renderJornadaLaboral", renderJornadaLaboral);
-    safeRender("renderClientesTecnico", renderClientesTecnico);
-    safeRender("renderHistorico", renderHistorico);
-    safeRender("renderGastos", renderGastos);
-    safeRender("renderAdmin", renderAdmin);
-    badgeTareas();
-  } catch(err) {
-    console.error("❌ Error crítico en renderAll:", err);
-    showRecoveryScreen(err);
-  }
+  applyRole();
+  const av=document.getElementById("tbAv");
+  if(S.session && S.session.role==="tecnico"){ const t=tecnico(S.session.tecnicoId); av.textContent=t?inits(t.nombre):"–"; }
+  else av.innerHTML=ICON_ADMIN;
+  const ruta = currentRuta();
+  if(!ruta){ renderNoRutas(); return; }
+  S.rutaSel = ruta.id;
+  document.getElementById("tbDate").textContent = fmtDate(S.fecha);
+  fillRutaSelect();
+  renderInicio(); renderJornadaLaboral(); renderClientesTecnico(); renderHistorico(); renderGastos(); renderAdmin();
+  badgeTareas();
 }
 function renderNoRutas(){
   document.getElementById("rtpickWrap").style.display="none";
@@ -2084,8 +1976,9 @@ function drawSheet(){
       <div class="amtbox"><input id="fImporte" type="number" inputmode="decimal" value="${s.importe}" onchange="sheetState.importe=parseFloat(this.value)||0"><span class="cur">€</span></div>
     </div>
     <div class="field"><label>Forma de cobro</label>
-      <div class="seg two">
+      <div class="seg">
         <button class="${s.forma==='efectivo'?'on':''}" onclick="setForma('efectivo')"><span class="si">💵</span>Efectivo</button>
+        <button class="${s.forma==='domiciliacion'?'on':''}" onclick="setForma('domiciliacion')"><span class="si">🏦</span>Banco</button>
         <button class="${s.forma==='pendiente'?'on':''}" onclick="setForma('pendiente')"><span class="si">⏳</span>Pendiente</button>
       </div>
     </div>`:""}
@@ -2148,6 +2041,7 @@ function preguntarAlcanceAroma(){
 function guardarVisita(){
   const s = sheetState;
   if(s.aroma && s.aroma.trim() && !s._aromaAlcance){ preguntarAlcanceAroma(); return; }
+  if(s.servicioOk!==false && s.forma==="domiciliacion" && !s._firma){ abrirFirmaPad(); return; }
   const j = getJornada(S.fecha, currentRuta().id);
   const v = j.visitas.find(x=>x.clienteId===sheetState.cid);
   v.hora = new Date().toISOString();
@@ -2780,16 +2674,19 @@ function genFactura(cid){
 }
 // tras crear un cliente nuevo: ofrece generar presupuesto / factura
 function trasNuevoCliente(cid){
-  const c=cliente(cid); if(!c) return;
+  const c=cliente(cid); if(!c) return; const tres=(c.importe||0)*3;
   const sh=document.getElementById("sheet");
   sh.innerHTML=`<div class="grab"></div><h2>Cliente creado ✓</h2>
     <p class="sub">${esc(c.negocio)} · añadido a su ruta</p>
     <div class="sumcard">
       <div class="suml"><div class="sl">Servicio</div><div class="sv">Aromatización</div></div>
       <div class="suml"><div class="sl">Cuota mensual</div><div class="sv">${EUR(c.importe)}</div></div>
-      <div class="suml"><div class="sl">Nota de trabajo</div><div class="sv" style="color:var(--accent-ink)">${c.notaTrabajo ? "Activa (Sin IVA)" : "Con IVA (21%)"}</div></div>
+      <div class="suml"><div class="sl">Primer cobro · 3 meses</div><div class="sv" style="color:var(--accent-ink)">${EUR(tres)}</div></div>
     </div>
-    <button class="cta" onclick="closeSheet();renderAll()">Entendido</button>`;
+    <button class="cta" onclick="genPresupuesto('${cid}')">📄 Generar presupuesto</button>
+    <button class="cta ghost" onclick="marcarAceptado('${cid}')">✅ Presupuesto aceptado → generar factura</button>
+    <button class="cta ghost" onclick="closeSheet();renderAll()">Ahora no</button>
+    <p style="font-size:12px;color:var(--faint);text-align:center;margin-top:10px">El documento se genera para que lo envíes tú al cliente.</p>`;
   openSheet();
 }
 function reabrir(){ const j=getJornada(S.fecha,currentRuta().id); j.cerrada=false; save(); renderAll(); toast("Jornada reabierta"); }
@@ -2815,6 +2712,7 @@ const ADMIN_SECTIONS = [
   { id: 'dashboard', label: 'Panel', icon: 'dashboard', desc: 'Resumen general y KPIs' },
   { id: 'calendario', label: 'Calendario', icon: 'calendar', desc: 'Ciclo de 28 días y rutas' },
   { id: 'clientes', label: 'Clientes', icon: 'building', desc: 'Gestión de empresas y servicios' },
+  { id: 'documentos', label: 'Facturas', icon: 'receipt', desc: 'Facturación e ingresos' },
   { id: 'gastos', label: 'Gastos', icon: 'wallet', desc: 'Control de costes y pagos' },
   { id: 'contabilidad', label: 'Contabilidad', icon: 'chart', desc: 'Resultados de explotación' },
   { id: 'incidencias', label: 'Incidencias', icon: 'alert', desc: 'Partes de trabajo y avisos' },
@@ -5229,7 +5127,7 @@ function editCliente(id){
     email:c?(c.email||""):"", telefono:c?(c.telefono||""):"",
     cp:c?c.cp:"", municipio:c?c.municipio:"", provincia:c?c.provincia:"Sevilla",
     descuentoPct:c?(c.descuentoPct||0):0, notaTrabajo:c?!!c.notaTrabajo:false,
-    formaHabitual:c?c.formaHabitual:"efectivo",
+    formaHabitual:c?c.formaHabitual:"efectivo", banco:c&&c.banco?{...c.banco}:{iban:"",titular:c?c.negocio:""},
     aroma:c?c.aroma:(S.aromas[0]||""), rutaId:c?c.rutaId:S.rutaSel,
     posicion: posActual<0?mismos.length:posActual, counts };
   drawCliSheet(); openSheet();
@@ -5242,6 +5140,7 @@ function captureCli(){
   cliDraft.cp=g("cl_cp").value; cliDraft.municipio=g("cl_mun").value; cliDraft.provincia=g("cl_prov").value;
   cliDraft.descuentoPct=parseFloat(g("cl_desc").value)||0; cliDraft.notaTrabajo=g("cl_nota").checked;
   cliDraft.formaHabitual=g("cl_forma").value;
+  if(g("cl_iban")){ cliDraft.banco.iban=g("cl_iban").value; cliDraft.banco.titular=g("cl_titular").value; }
   cliDraft.aroma=g("cl_aroma").value; cliDraft.rutaId=g("cl_ruta").value;
   if(g("cl_pos")) cliDraft.posicion=parseInt(g("cl_pos").value,10)||0;
 }
@@ -5276,7 +5175,10 @@ function drawCliSheet(){
       <div><label class="mini-lbl">Email</label><input class="fld-inp" id="cl_email" type="email" value="${esc(d.email)}" placeholder="contacto@negocio.com"></div>
       <div><label class="mini-lbl">Teléfono</label><input class="fld-inp" id="cl_tel" type="tel" value="${esc(d.telefono)}" placeholder="600 000 000"></div>
     </div>
-    <label class="mini-lbl">Forma de cobro habitual</label><select class="fld-inp" id="cl_forma" onchange="captureCli();drawCliSheet()">${opt("efectivo","💵 Efectivo",d.formaHabitual)}${opt("pendiente","⏳ Pendiente",d.formaHabitual)}</select>
+    <label class="mini-lbl">Forma de cobro habitual</label><select class="fld-inp" id="cl_forma" onchange="captureCli();drawCliSheet()">${opt("efectivo","💵 Efectivo",d.formaHabitual)}${opt("domiciliacion","🏦 Domiciliación",d.formaHabitual)}${opt("pendiente","⏳ Pendiente",d.formaHabitual)}</select>
+    ${d.formaHabitual==="domiciliacion"?`<div style="background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:12px;margin-top:8px">
+      <label class="mini-lbl" style="margin-top:0">Titular de la cuenta</label><input class="fld-inp" id="cl_titular" value="${esc(d.banco.titular)}">
+      <label class="mini-lbl">IBAN</label><input class="fld-inp" id="cl_iban" value="${esc(d.banco.iban)}" placeholder="ES00 0000 0000 00 0000000000"></div>`:""}
     <label class="mini-lbl">Aroma actual</label><select class="fld-inp" id="cl_aroma">${S.aromas.map(a=>opt(a,a,d.aroma)).join("")}</select>
     <label class="mini-lbl">Ruta</label><select class="fld-inp" id="cl_ruta" onchange="cliRutaChanged()">${S.rutas.map(r=>opt(r.id,r.nombre,d.rutaId)).join("")}</select>
     <label class="mini-lbl">Posición en la ruta</label><select class="fld-inp" id="cl_pos">
@@ -5554,13 +5456,13 @@ function wipe(){ askConfirm("¿Borrar TODOS los datos? No se puede deshacer.", (
 /* ---- perfil / sesión ---- */
 function renderLogin(){
   const wrap = document.getElementById("loginRoles");
-  let html = `<button class="login-btn admin" onclick="doLogin('admin',null)">
-      <span>${ICON_ADMIN}</span><div><b>Administrador</b><small>Acceso completo · Clave por defecto: 0000</small></div></button>
+  let html = `<button class="login-btn admin" onclick="pedirClave('admin')">
+      <span>${ICON_ADMIN}</span><div><b>Administrador</b><small>Alta de clientes, rutas, técnicos e informes</small></div></button>
     <div class="login-sep">Técnicos de ruta</div>`;
   html += S.tecnicos.length? S.tecnicos.map(t=>{
     const rs = S.rutas.filter(r=>r.tecnicoId===t.id).map(r=>r.nombre).join(" · ");
-    return `<button class="login-btn" onclick="doLogin('tecnico','${t.id}')">
-      <span class="av2">${inits(t.nombre)}</span><div><b>${t.nombre}</b><small>${rs||"Sin rutas asignadas"} · Clave: 1234</small></div></button>`;
+    return `<button class="login-btn" onclick="pedirClave('tecnico','${t.id}')">
+      <span class="av2">${inits(t.nombre)}</span><div><b>${t.nombre}</b><small>${rs||"Sin rutas asignadas"}</small></div></button>`;
   }).join("") : `<div class="empty" style="padding:16px">Aún no hay técnicos. Entra como administrador para crearlos.</div>`;
   wrap.innerHTML = html;
 }
@@ -5572,15 +5474,12 @@ function showLogin(){
 }
 function pedirClave(role, tecnicoId){
   const nombre = role==="admin" ? "Administrador" : (tecnico(tecnicoId)?tecnico(tecnicoId).nombre:"");
-  const defaultPass = role==="admin" ? (S.adminClave||"0000") : "1234";
   const card=document.querySelector(".login-card");
   card.innerHTML=`<img class="login-logo" src="logo.png" alt="AMBIÉNTATE"><p>Hola, <b>${esc(nombre)}</b> · introduce tu clave</p>
-    <input class="fld-inp" id="loginPin" type="password" inputmode="numeric" placeholder="Contraseña" value="${defaultPass}"
+    <input class="fld-inp" id="loginPin" type="password" inputmode="numeric" placeholder="Contraseña"
       style="text-align:center;font-size:22px;letter-spacing:6px" onkeydown="if(event.key==='Enter')validarClave('${role}','${tecnicoId||''}')">
-    <div id="loginErr" style="color:var(--crit);font-size:13px;font-weight:600;height:18px;margin:4px 0"></div>
-    <div style="font-size:12.5px;color:var(--muted);margin-bottom:12px">💡 Clave por defecto: <b>${defaultPass}</b></div>
+    <div id="loginErr" style="color:var(--crit);font-size:13px;font-weight:600;height:18px;margin:8px 0"></div>
     <button class="cta" onclick="validarClave('${role}','${tecnicoId||''}')">Entrar</button>
-    <button class="cta ghost" style="margin-top:6px" onclick="doLogin('${role}','${tecnicoId||''}')">🔓 Entrar sin contraseña</button>
     <button class="cta ghost" onclick="showLogin()">← Volver</button>`;
   setTimeout(()=>{ const el=document.getElementById("loginPin"); if(el) el.focus(); },60);
 }
@@ -5621,19 +5520,31 @@ function applyRole(){
 
 /* ---- navegación ---- */
 function switchTab(name){
+  if(name==="EditorFactura"){
+    currentTab="EditorFactura";
+    document.querySelectorAll(".tab").forEach(t=>t.classList.remove("on"));
+    ["Inicio","Clientes","Caja","Historico","Gastos","Admin","EditorFactura"].forEach(v=>{
+      const el = document.getElementById("view"+v);
+      if(el) el.classList.toggle("hidden",v!=="EditorFactura");
+    });
+    tbSet("Editor de Facturas");
+    document.getElementById("rtpickWrap").style.display="none";
+    window.scrollTo(0,0);
+    drawEditorFactura();
+    return;
+  }
   if(name==="Admin" && !isAdmin()){ pedirClave('admin'); return; }
   if((name==="Gastos"||name==="Clientes") && isAdmin()){ name="Admin"; }
   if((name==="Inicio"||name==="Caja") && isAdmin()){ name="Admin"; } // el admin no ejecuta rutas
   currentTab=name;
   document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("on",t.dataset.tab===name));
-  ["Inicio","Clientes","Caja","Historico","Gastos","Admin"].forEach(v=>{
+  ["Inicio","Clientes","Caja","Historico","Gastos","Admin","EditorFactura"].forEach(v=>{
     const el = document.getElementById("view"+v);
     if(el) el.classList.toggle("hidden",v!==name);
   });
   const titles={Inicio:currentRuta()?currentRuta().nombre:"AMBIÉNTATE",Clientes:"Clientes",Caja:"Jornada laboral",Historico:"Histórico",Gastos:"Gastos",Admin:"Administración"};
-  tbSet(titles[name]||"AMBIÉNTATE");
-  const rtWrap = document.getElementById("rtpickWrap");
-  if(rtWrap) rtWrap.style.display = (name==="Inicio")?"flex":"none";
+  tbSet(titles[name]);
+  document.getElementById("rtpickWrap").style.display = (name==="Inicio")?"flex":"none";
   const sc = document.querySelector("#app main:not(.hidden)"); if(sc) sc.scrollTop=0;
   window.scrollTo(0,0);
   if(name==="Clientes") renderClientesTecnico();
@@ -5665,49 +5576,44 @@ window.addEventListener("beforeunload", save);
 /* ---- init ---- */
 // 1. Renderizado instantáneo (0 ms) con los datos locales para evitar pantalla fija en blanco
 try {
-  if(!S || typeof S !== "object") S = load();
-  patchState(S);
+  if(!S.fecha) S.fecha = todayISO();
+  if(!S.rutaSel) S.rutaSel = S.rutas[0]?.id;
   autoCloseCheck();
-  renderAll();
-  switchTab(S.session && S.session.role === "admin" ? "Admin" : "Inicio");
-} catch(initErr) {
-  console.error("❌ Error en el render inicial:", initErr);
-  try {
-    S = seed();
-    patchState(S);
-    renderAll();
-    switchTab("Admin");
-  } catch(fatalErr) {
-    showRecoveryScreen(fatalErr);
+  if(!S.session || !S.session.role){
+    S.session = { role: "admin", tecnicoId: null };
   }
+  renderAll();
+  switchTab(S.session.role === "admin" ? "Admin" : "Inicio");
+} catch(initErr) {
+  console.error("Error en el render inicial:", initErr);
+  S = seed();
+  S.session = { role: "admin", tecnicoId: null };
+  renderAll();
+  switchTab("Admin");
 }
 
 // 2. Sincronización asíncrona con el servidor en segundo plano (sin bloquear la interfaz)
 (async function syncAppWithServer() {
   try {
     const serverState = await loadFromServer();
-    if (serverState && typeof serverState === "object") {
-      patchState(serverState);
-      // Solo sobreescribir S si el servidor devuelve entidades válidas (rutas o clientes)
-      if ((serverState.rutas && serverState.rutas.length) || (serverState.clientes && serverState.clientes.length)) {
-        const localSession = S ? S.session : null;
-        const localFecha = S ? S.fecha : null;
-        const localRutaSel = S ? S.rutaSel : null;
-        S = serverState;
-        if (localSession && localSession.role) S.session = localSession;
-        if (localFecha) S.fecha = localFecha;
-        if (localRutaSel) S.rutaSel = localRutaSel;
-        try { localStorage.setItem(LS_KEY, JSON.stringify(S)); } catch(e) {}
-        renderAll();
-        switchTab(S.session && S.session.role === "admin" ? "Admin" : "Inicio");
-        console.log('✓ Datos sincronizados con el servidor');
-      }
+    if (serverState) {
+      const localSession = S.session;
+      const localFecha = S.fecha;
+      const localRutaSel = S.rutaSel;
+      S = serverState;
+      patchState(S);
+      if (localSession && localSession.role) S.session = localSession;
+      if (localFecha) S.fecha = localFecha;
+      if (localRutaSel) S.rutaSel = localRutaSel;
+      try { localStorage.setItem(LS_KEY, JSON.stringify(S)); } catch(e) {}
+      renderAll();
+      switchTab(S.session.role === "admin" ? "Admin" : "Inicio");
+      console.log('✓ Datos sincronizados con el servidor');
     }
   } catch(syncErr) {
-    console.warn("⚠️ Sincronización en segundo plano no completada:", syncErr);
+    console.warn("Sincronización en segundo plano no completada:", syncErr);
   }
 })();
-
 </script>
 </body>
 </html>
