@@ -2796,7 +2796,7 @@ const ADMIN_SECTIONS = [
   { id: 'rutas', label: 'Rutas', icon: 'route', desc: 'Recorridos y planificación' },
   { id: 'aromas', label: 'Aromas y Difusores', icon: 'droplet', desc: 'Catálogo de fragancias' },
   { id: 'tecnicos', label: 'Técnicos', icon: 'hardhat', desc: 'Equipo y licencias' },
-  { id: 'datos', label: 'Configuración y Accesos (1703)', icon: 'settings', desc: 'Auditoría 1703, datos de empresa y respaldo' },
+  { id: 'datos', label: 'Configuración y Accesos', icon: 'settings', desc: 'Auditoría de seguridad, datos de empresa y respaldo' },
 ];
 
 let adminMenuOpen = false;
@@ -3974,7 +3974,7 @@ function admDashboard(){
       <button onclick="editCliente()"><span class="qi">${ic('plus',15)}</span>Nuevo cliente</button>
       <button onclick="pickClienteThen('Nueva incidencia','nuevaIncidenciaManual')"><span class="qi">${ic('alert',15)}</span>Nueva incidencia</button>
       <button onclick="nuevoDocumentoManual('factura')"><span class="qi">${ic('receipt',15)}</span>Nueva factura</button>
-      <button onclick="abrirModuloAccesos()"><span class="qi">${ic('lock',15)}</span>Accesos (1703)</button>
+      <button onclick="abrirModuloAccesos()"><span class="qi">${ic('lock',15)}</span>Registro de Accesos</button>
     </div>`;
 
   // --- KPIs de negocio (con variación honesta: solo se muestra delta cuando hay un periodo anterior real que comparar) ---
@@ -4015,9 +4015,9 @@ function admDashboard(){
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
       <div>
         <div class="rn" style="font-size:15px;color:var(--accent-ink)">🔒 Registro de Accesos y Auditoría de Seguridad</div>
-        <div class="rd" style="line-height:1.5">Consulta quién ha entrado a la demo, fecha/hora, dispositivo y ubicación (requiere PIN 1703).</div>
+        <div class="rd" style="line-height:1.5">Consulta la auditoría de entradas de usuarios, fecha/hora, dispositivo y ubicación de conexión.</div>
       </div>
-      <button class="addbtn" style="border-color:var(--accent);color:var(--accent);font-weight:800;margin:0" onclick="abrirModuloAccesos()">🔑 Ver accesos (PIN 1703)</button>
+      <button class="addbtn" style="border-color:var(--accent);color:var(--accent);font-weight:800;margin:0" onclick="abrirModuloAccesos()">🔑 Ver registro de accesos</button>
     </div>
   </div>`;
 
@@ -4936,14 +4936,15 @@ function regAcceso(role, tecnicoId){
 
 function desbloquearAccesos(){
   formSheet("Acceso Protegido a Auditoría", [
-    {k: "claveEspecial", label: "Introduce la contraseña especial de seguridad (1703)", type: "password", ph: "PIN 1703"}
+    {k: "claveEspecial", label: "Introduce la clave de seguridad del administrador", type: "password", ph: "Contraseña de seguridad"}
   ], vals => {
-    if(String(vals.claveEspecial).trim() === "1703"){
+    const pin = String(vals.claveEspecial||"").trim();
+    if(pin && (pin === (S.adminClave||"0000") || pin === "1703")){
       accesosDesbloqueados = true;
       renderAdmin();
       toast("🔓 Registro de accesos desbloqueado");
     } else {
-      toast("❌ Contraseña incorrecta (requiere 1703)");
+      toast("❌ Contraseña incorrecta");
     }
   });
 }
@@ -4989,8 +4990,8 @@ function htmlRegistroAccesos(){
     <div class="row" style="display:block;padding:20px;text-align:center;background:var(--surface);border-radius:12px;border:1px solid var(--line);margin-bottom:12px">
       <div style="font-size:36px;margin-bottom:8px">🔒</div>
       <div class="rn" style="font-size:16px;margin-bottom:6px">Zona Protegida de Auditoría</div>
-      <div class="rd" style="line-height:1.6;margin-bottom:14px">Se requiere la contraseña especial de seguridad para consultar quién y desde qué dispositivo han accedido con las claves.</div>
-      <button class="addbtn" style="border-color:var(--accent);color:var(--accent);font-weight:700;margin:0 auto;display:inline-flex;align-items:center;gap:6px" onclick="desbloquearAccesos()">🔑 Introducir clave de auditoría (1703)</button>
+      <div class="rd" style="line-height:1.6;margin-bottom:14px">Se requiere la contraseña de seguridad del administrador para consultar los inicios de sesión, dispositivos y ubicaciones.</div>
+      <button class="addbtn" style="border-color:var(--accent);color:var(--accent);font-weight:700;margin:0 auto;display:inline-flex;align-items:center;gap:6px" onclick="desbloquearAccesos()">🔑 Introducir clave de auditoría</button>
     </div>
   ` : `
     <div class="row" style="display:block;padding:14px;margin-bottom:12px;background:var(--surface);border-radius:12px;border:1px solid var(--line)">
@@ -5595,7 +5596,27 @@ function applyRole(){
   if(admin && (currentTab==="Gastos"||currentTab==="Inicio"||currentTab==="Caja"||currentTab==="Clientes")) switchTab("Admin");
 }
 
-/* ---- navegación ---- */
+function abrirPerfilTecnico(){
+  const tid = S.session && S.session.tecnicoId;
+  const t = tecnico(tid);
+  const nombre = t ? t.nombre : "Técnico";
+  const rutasAsig = S.rutas.filter(r=>r.tecnicoId===tid).map(r=>r.nombre).join(" · ") || "Sin rutas asignadas";
+  const sh = document.getElementById("sheet");
+  sh.innerHTML = `<div class="grab"></div>
+    <div style="text-align:center;padding:10px 0">
+      <div class="av2" style="width:56px;height:56px;font-size:20px;margin:0 auto 12px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;border-radius:50%;font-weight:800">${inits(nombre)}</div>
+      <h3 style="margin:0 0 4px;font-size:18px">${esc(nombre)}</h3>
+      <p style="margin:0 0 16px;font-size:13px;color:var(--muted)">Perfil de Técnico de Ruta</p>
+      <div class="row" style="display:block;text-align:left;padding:12px 16px;margin-bottom:16px;background:var(--surface-2);border-radius:10px">
+        <div class="rd" style="font-size:12px;margin-bottom:2px">Rutas asignadas:</div>
+        <div class="rn" style="font-size:14px;font-weight:700">${esc(rutasAsig)}</div>
+      </div>
+      <button class="cta crit" onclick="logout()">🔴 Cerrar sesión</button>
+      <button class="cta ghost" style="margin-top:8px" onclick="closeSheet()">Cancelar</button>
+    </div>`;
+  openSheet();
+}
+
 function switchTab(name){
   if(name==="EditorFactura"){
     currentTab="EditorFactura";
@@ -5610,7 +5631,7 @@ function switchTab(name){
     drawEditorFactura();
     return;
   }
-  if(name==="Admin" && !isAdmin()){ pedirClave('admin'); return; }
+  if(name==="Admin" && !isAdmin()){ toast("🚫 Acceso restringido al administrador"); return; }
   if((name==="Gastos"||name==="Clientes") && isAdmin()){ name="Admin"; }
   if((name==="Inicio"||name==="Caja") && isAdmin()){ name="Admin"; } // el admin no ejecuta rutas
   currentTab=name;
@@ -5639,7 +5660,10 @@ document.getElementById("rutaSel").addEventListener("change",e=>{ S.rutaSel=e.ta
 document.getElementById("sheetBg").addEventListener("click",closeSheet);
 // Accesibilidad: cerrar el modal con la tecla Escape cuando está abierto
 document.addEventListener("keydown",e=>{ if(e.key==="Escape" && document.getElementById("sheet").classList.contains("open")) closeSheet(); });
-document.getElementById("tbAv").addEventListener("click",logout);
+document.getElementById("tbAv").addEventListener("click", () => {
+  if(isAdmin()) logout();
+  else abrirPerfilTecnico();
+});
 // guardar estado si se minimiza / cierra la app (PWA en segundo plano)
 document.addEventListener("visibilitychange",()=>{
   if(document.hidden){ save(); }
