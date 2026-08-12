@@ -840,42 +840,62 @@ var currentTab = "Inicio";
 
 function load(){
   try{ const raw = localStorage.getItem(LS_KEY); if(raw){ const s=JSON.parse(raw);
-    patchState(s);
-    try{ localStorage.setItem(LS_KEY, JSON.stringify(s)); }catch(err){}
-    return s; } }catch(e){}
-  return seed();
+    if(s && typeof s === "object" && Array.isArray(s.rutas) && s.rutas.length && Array.isArray(s.clientes) && s.clientes.length){
+      patchState(s);
+      try{ localStorage.setItem(LS_KEY, JSON.stringify(s)); }catch(err){}
+      return s;
+    }
+  } }catch(e){}
+  const fresh = seed();
+  try{ localStorage.setItem(LS_KEY, JSON.stringify(fresh)); }catch(err){}
+  return fresh;
 }
 // Aplica defaults/migraciones al estado cargado (desde localStorage o del servidor)
 function patchState(s){
-    if(!s.aromas||!s.aromas.length) s.aromas=DEFAULT_AROMAS.slice();
-    if(!s.sectores||!s.sectores.length) s.sectores=DEFAULT_SECTORES.slice();
-    if(!s.tareas) s.tareas=[];
-    if(!s.reprogram) s.reprogram={};
-    if(!s.aromaCoste) s.aromaCoste={};
-    if(!s.aromaCategoria) s.aromaCategoria={};
-    if(!s.aromaProveedor) s.aromaProveedor={};
-    if(!s.eventos) s.eventos=[];
-    if(!s.aromaCompra){
+    if(!s || typeof s !== "object") return;
+    if(!Array.isArray(s.rutas) || !s.rutas.length || !Array.isArray(s.clientes) || !s.clientes.length || !Array.isArray(s.tecnicos) || !s.tecnicos.length) {
+      const seeded = seed();
+      s.rutas = seeded.rutas;
+      s.clientes = seeded.clientes;
+      s.tecnicos = seeded.tecnicos;
+      s.jornadas = seeded.jornadas;
+    }
+    if(!Array.isArray(s.aromas) || !s.aromas.length) s.aromas=DEFAULT_AROMAS.slice();
+    if(!Array.isArray(s.sectores) || !s.sectores.length) s.sectores=DEFAULT_SECTORES.slice();
+    if(!s.jornadas || typeof s.jornadas !== "object" || Array.isArray(s.jornadas)) s.jornadas={};
+    if(!Array.isArray(s.gastos)) s.gastos=[];
+    if(!Array.isArray(s.tareas)) s.tareas=[];
+    if(!s.reprogram || typeof s.reprogram !== "object") s.reprogram={};
+    if(!s.aromaCoste || typeof s.aromaCoste !== "object") s.aromaCoste={};
+    if(!s.aromaCategoria || typeof s.aromaCategoria !== "object") s.aromaCategoria={};
+    if(!s.aromaProveedor || typeof s.aromaProveedor !== "object") s.aromaProveedor={};
+    if(!Array.isArray(s.eventos)) s.eventos=[];
+    if(!s.aromaCompra || typeof s.aromaCompra !== "object"){
       s.aromaCompra={}; Object.keys(s.aromaCoste).forEach(a=>{ s.aromaCompra[a]={"Litro nebulización":s.aromaCoste[a]}; });
     }
-    if(!s.formatoVenta) s.formatoVenta={"Litro nebulización":150,"Bote hidroalcohólico":13,"Bacteriostático":0};
-    if(!s.fichajes) s.fichajes=[];
-    if(!s.documentos) s.documentos=[];
-    if(!s.solicitudes) s.solicitudes=[];
+    if(!s.formatoVenta || typeof s.formatoVenta !== "object") s.formatoVenta={"Litro nebulización":150,"Bote hidroalcohólico":13,"Bacteriostático":0};
+    if(!Array.isArray(s.fichajes)) s.fichajes=[];
+    if(!Array.isArray(s.documentos)) s.documentos=[];
+    if(!Array.isArray(s.solicitudes)) s.solicitudes=[];
     if(s.autoClose===undefined) s.autoClose=false;
-    if(!s.empresa) s.empresa=DEFAULT_EMPRESA;
-    if(!s.proveedores) s.proveedores=[];
-    if(!s.vehiculos) s.vehiculos=[];
-    if(!s.dispositivos||!s.dispositivos.length) s.dispositivos=DISPOSITIVOS_DEFAULT.slice();
-    if(!s.stockDifusores) s.stockDifusores={};
+    if(!s.empresa || typeof s.empresa !== "object") s.empresa=DEFAULT_EMPRESA;
+    if(!Array.isArray(s.proveedores)) s.proveedores=[];
+    if(!Array.isArray(s.vehiculos)) s.vehiculos=[];
+    if(!Array.isArray(s.dispositivos) || !s.dispositivos.length) s.dispositivos=DISPOSITIVOS_DEFAULT.slice();
+    if(!s.stockDifusores || typeof s.stockDifusores !== "object") s.stockDifusores={};
     if(!s.ivaPct) s.ivaPct=21;
-    (s.rutas||[]).forEach(r=>{ if(r.municipio===undefined) r.municipio=""; });
-    if(!s.numeracion) s.numeracion={factura:{prefijo:"FAC-",siguiente:1},presupuesto:{prefijo:"PRE-",siguiente:1},albaran:{prefijo:"ALB-",siguiente:1}};
+    (s.rutas||[]).forEach(r=>{ if(r && r.municipio===undefined) r.municipio=""; });
+    if(!s.numeracion || typeof s.numeracion !== "object") s.numeracion={factura:{prefijo:"FAC-",siguiente:1},presupuesto:{prefijo:"PRE-",siguiente:1},albaran:{prefijo:"ALB-",siguiente:1}};
     (s.tecnicos||[]).forEach(t=>{
-      if(t.id==="t1" || t.nombre==="Juan Martín") t.nombre="Técnico 1";
-      if(t.id==="t2" || t.nombre==="Ana López") t.nombre="Técnico 2";
-      if(t.id==="t3" || t.nombre==="Marta Ruiz") t.nombre="Técnico 3";
+      if(t){
+        if(t.id==="t1" || t.nombre==="Juan Martín") t.nombre="Técnico 1";
+        if(t.id==="t2" || t.nombre==="Ana López") t.nombre="Técnico 2";
+        if(t.id==="t3" || t.nombre==="Marta Ruiz") t.nombre="Técnico 3";
+      }
     });
+    if(!s.session || typeof s.session !== "object" || !s.session.role) {
+      s.session = { role: "admin", tecnicoId: null };
+    }
 }
 // Almacenamiento: localStorage tiene ~5 MB. Las fotos de gasto (base64) pueden agotarlo.
 // MEJORA FUTURA: mover las fotos a IndexedDB (sin límite práctico) y guardar solo la referencia aquí.
@@ -1154,10 +1174,18 @@ function cliente(id){ return S.clientes.find(c=>c.id===id); }
 function tecnico(id){ return S.tecnicos.find(t=>t.id===id); }
 // rutas visibles según el perfil: admin ve todas, técnico solo las suyas
 function availableRutas(){
-  if(S.session && S.session.role==="tecnico") return S.rutas.filter(r=>r.tecnicoId===S.session.tecnicoId);
+  if(!S || !Array.isArray(S.rutas)) return [];
+  if(S.session && S.session.role==="tecnico"){
+    const list = S.rutas.filter(r=>r && r.tecnicoId===S.session.tecnicoId);
+    return list.length ? list : S.rutas;
+  }
   return S.rutas;
 }
-function currentRuta(){ const rs=availableRutas(); return rs.find(r=>r.id===S.rutaSel) || rs[0]; }
+function currentRuta(){
+  const rs = availableRutas();
+  if(!rs || !rs.length) return (S && Array.isArray(S.rutas) && S.rutas[0]) ? S.rutas[0] : null;
+  return rs.find(r=>r && r.id===S.rutaSel) || rs[0];
+}
 function isAdmin(){ return !S.session || S.session.role==="admin"; }
 
 function stats(j){
@@ -1275,18 +1303,41 @@ function donutChart(segments, size){
 }
 
 /* ==================== RENDER ==================== */
+function safeRender(name, fn){
+  try { fn(); } catch(err) { console.error("Error en vista "+name+":", err); }
+}
 function renderAll(){
-  applyRole();
-  const av=document.getElementById("tbAv");
-  if(S.session && S.session.role==="tecnico"){ const t=tecnico(S.session.tecnicoId); av.textContent=t?inits(t.nombre):"–"; }
-  else av.innerHTML=ICON_ADMIN;
-  const ruta = currentRuta();
-  if(!ruta){ renderNoRutas(); return; }
-  S.rutaSel = ruta.id;
-  document.getElementById("tbDate").textContent = fmtDate(S.fecha);
-  fillRutaSelect();
-  renderInicio(); renderJornadaLaboral(); renderClientesTecnico(); renderHistorico(); renderGastos(); renderAdmin();
-  badgeTareas();
+  try {
+    if(!S || typeof S !== "object" || !Array.isArray(S.rutas) || !S.rutas.length) S = load();
+    patchState(S);
+    applyRole();
+    const av=document.getElementById("tbAv");
+    if(av){
+      if(S.session && S.session.role==="tecnico"){ const t=tecnico(S.session.tecnicoId); av.textContent=t?inits(t.nombre):"–"; }
+      else av.innerHTML=ICON_ADMIN;
+    }
+    const ruta = currentRuta();
+    if(!ruta){ renderNoRutas(); return; }
+    S.rutaSel = ruta.id;
+    const tbDate = document.getElementById("tbDate");
+    if(tbDate) tbDate.textContent = fmtDate(S.fecha);
+    fillRutaSelect();
+    safeRender("Inicio", renderInicio);
+    safeRender("Jornada", renderJornadaLaboral);
+    safeRender("Clientes", renderClientesTecnico);
+    safeRender("Historico", renderHistorico);
+    safeRender("Gastos", renderGastos);
+    safeRender("Admin", renderAdmin);
+    badgeTareas();
+  } catch(err) {
+    console.error("Error crítico en renderAll:", err);
+    try {
+      localStorage.removeItem(LS_KEY);
+      S = seed();
+      patchState(S);
+      renderAll();
+    } catch(e2) {}
+  }
 }
 function renderNoRutas(){
   document.getElementById("rtpickWrap").style.display="none";
