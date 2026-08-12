@@ -594,12 +594,31 @@
 
 <script>
 "use strict";
-/* ---- diagnóstico: captura errores JS y los muestra en pantalla ---- */
+/* ---- recuperación de emergencia contra pantallas congeladas ---- */
+function recuperarApp(){
+  try { localStorage.removeItem("ambientate_v1"); } catch(e){}
+  location.reload(true);
+}
+function showRecoveryScreen(msg){
+  var app = document.getElementById("app") || document.body;
+  if(!app) return;
+  app.innerHTML = `<div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px;text-align:center;font-family:system-ui,-apple-system,sans-serif;background:#F6F8FB;color:#101828;box-sizing:border-box">
+    <div style="font-size:52px;margin-bottom:14px">🚚</div>
+    <h2 style="font-size:22px;font-weight:800;margin:0 0 8px">Se ha producido una pausa en la aplicación</h2>
+    <p style="font-size:14.5px;color:#667085;margin:0 0 24px;max-width:320px;line-height:1.4">Pulsa el botón para restaurar el acceso inmediato y restablecer los datos de ruta.</p>
+    <button onclick="recuperarApp()" style="width:100%;max-width:290px;padding:16px 20px;border-radius:14px;background:#2563EB;color:#fff;font-weight:800;font-size:16px;border:none;box-shadow:0 4px 14px rgba(37,99,235,0.35);cursor:pointer">
+      ⚡ Restaurar y Entrar
+    </button>
+  </div>`;
+}
 window.onerror = function(msg, src, line, col, err) {
-  var d = document.createElement('div');
-  d.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#D92D20;color:#fff;padding:16px 20px;font:14px/1.5 monospace;white-space:pre-wrap;word-break:break-all';
-  d.textContent = '❌ ERROR JS:\n' + msg + '\nLínea: ' + line + ', Col: ' + col + '\n' + (err && err.stack ? err.stack : '');
-  document.body.prepend(d);
+  console.error("❌ ERROR JS:", msg, line, err);
+  showRecoveryScreen(msg);
+  return true;
+};
+window.onunhandledrejection = function(e) {
+  console.error("❌ PROMISE REJECTION:", e.reason);
+  showRecoveryScreen(e.reason ? e.reason.message||String(e.reason) : "Error de inicialización");
 };
 
 /* ---- CAPA API: comunicación con el backend SQLite ---- */
@@ -1151,15 +1170,21 @@ function newVisita(clienteId, estado, heredada, orden){
   return {clienteId, estado, heredada:!!heredada, orden, servicioOk:null,
     cobro:null, ventaAdic:null, cambioAroma:null, incidencia:null, hora:null};
 }
+function safeJornadas(){
+  if(!S || !S.jornadas || typeof S.jornadas !== "object" || Array.isArray(S.jornadas)) return [];
+  return Object.values(S.jornadas).filter(j=>j && typeof j === "object");
+}
+
 // busca en jornadas cerradas anteriores de esta ruta, las visitas que quedaron pendientes y no se han resuelto después
 function collectPendientes(fecha, rutaId){
-  const prev = Object.values(S.jornadas)
+  const prev = safeJornadas()
     .filter(j=>j.rutaId===rutaId && j.fecha < fecha && j.cerrada)
     .sort((a,b)=>a.fecha<b.fecha?1:-1); // más reciente primero
   const out = []; const seen = new Set();
   for(const j of prev){
-    for(const v of j.visitas){
-      if(seen.has(v.clienteId)) continue;
+    const list = Array.isArray(j.visitas) ? j.visitas : [];
+    for(const v of list){
+      if(!v || !v.clienteId || seen.has(v.clienteId)) continue;
       // pendiente = no realizada al cerrar (cerrado/ausente/incidencia sin servicio/programada)
       if(v.estado==="realizada"){ seen.add(v.clienteId); continue; }
       out.push({clienteId:v.clienteId});
@@ -1167,7 +1192,7 @@ function collectPendientes(fecha, rutaId){
     }
   }
   // solo los que siguen perteneciendo a la ruta y activos
-  return out.filter(o=>{ const c=S.clientes.find(x=>x.id===o.clienteId); return c && c.activo!==false && c.rutaId===rutaId; });
+  return out.filter(o=>{ const c=cliente(o.clienteId); return c && c.activo!==false && c.rutaId===rutaId; });
 }
 
 function cliente(id){ return S.clientes.find(c=>c.id===id); }
