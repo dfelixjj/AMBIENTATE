@@ -4971,6 +4971,7 @@ function borrarHistorialAccesos(){
     renderAdmin();
     toast("🗑️ Historial de accesos borrado");
   }, true);
+}
 function abrirModuloAccesos(){
   if(!isAdmin()){ toast("Acceso exclusivo para administradores"); return; }
   admTab = "datos";

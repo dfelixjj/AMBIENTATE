@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ambientate-v9';
+const CACHE_NAME = 'ambientate-v12';
 const ASSETS = [
   './',
   './index.html',
